@@ -1,0 +1,6 @@
+{
+  "name": "Tiến Lên & Sâm Lốc Online",
+  "description": "Web game đánh bài online nhiều người chơi realtime hỗ trợ luật Tiến Lên Miền Nam và Sâm Lốc",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
