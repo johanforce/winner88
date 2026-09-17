@@ -1,6 +1,6 @@
 {
-  "name": "Tiến Lên & Sâm Lốc Online",
-  "description": "Web game đánh bài online nhiều người chơi realtime hỗ trợ luật Tiến Lên Miền Nam và Sâm Lốc",
+  "name": "Winner88 - Game Bài & Cờ Tướng Cờ Chớp Online",
+  "description": "Nền tảng thi đấu Tiến Lên Miền Nam, Sâm Lốc và Cờ Tướng (thể thức Tiêu chuẩn Quốc tế 60p+30s hoặc Cờ chớp 5p) thời gian thực, hỗ trợ 2 kỳ thủ và 2 slot theo dõi trực tiếp.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

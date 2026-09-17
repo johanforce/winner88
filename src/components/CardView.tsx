@@ -43,7 +43,7 @@ export const CardView: React.FC<CardViewProps> = ({
   const sizeClasses = {
     xs: 'w-7 h-10 text-[10px] rounded',
     sm: 'w-10 h-14 text-xs rounded-md',
-    md: 'w-14 h-20 sm:w-16 sm:h-24 text-sm sm:text-base rounded-lg',
+    md: 'w-[48px] h-[72px] min-w-[48px] sm:w-16 sm:h-24 text-xs sm:text-base rounded-lg sm:rounded-xl',
     lg: 'w-16 h-24 sm:w-20 sm:h-28 text-base sm:text-lg rounded-xl',
   }[size];
 
@@ -77,7 +77,7 @@ export const CardView: React.FC<CardViewProps> = ({
         ${sizeClasses}
         relative flex flex-col justify-between p-1 sm:p-1.5
         bg-white
-        border-2 transition-all duration-150 select-none shadow-md
+        border-2 transition-all duration-150 select-none shadow-md touch-manipulation
         ${isSelected ? '-translate-y-4 sm:-translate-y-5 ring-2 ring-amber-400 border-amber-500 shadow-xl shadow-amber-500/20 z-20' : 'hover:-translate-y-1 z-0'}
         ${isHighlighted ? 'border-amber-400 ring-2 ring-amber-400/80 animate-pulse' : isSelected ? '' : 'border-slate-300 hover:border-slate-400'}
         ${disabled ? 'opacity-50 cursor-not-allowed filter grayscale-[30%]' : 'cursor-pointer active:scale-95'}

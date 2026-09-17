@@ -1,5 +1,5 @@
 import { GameRoom } from './gameRoom';
-import { GameRule, RoomListItem } from './types';
+import { GameRule, RoomListItem, XiangqiTimeMode } from './types';
 
 export class RoomManager {
   private rooms: Map<string, GameRoom> = new Map();
@@ -12,9 +12,24 @@ export class RoomManager {
     }, 30000);
   }
 
-  public createRoom(rule: GameRule, onStateChange: (code: string) => void): GameRoom {
+  public createRoom(
+    rule: GameRule,
+    onStateChange: (code: string) => void,
+    xiangqiTimeMode?: XiangqiTimeMode
+  ): GameRoom {
     const code = this.generateRoomCode(rule);
-    const room = new GameRoom(code, rule, () => onStateChange(code));
+    const room = new GameRoom(
+      code,
+      rule,
+      () => onStateChange(code),
+      xiangqiTimeMode,
+      (playerId, isEmpty) => {
+        this.unregisterPlayer(playerId);
+        if (isEmpty) {
+          this.deleteRoom(code);
+        }
+      }
+    );
     this.rooms.set(code, room);
     return room;
   }
@@ -44,6 +59,7 @@ export class RoomManager {
       list.push({
         code: room.code,
         rule: room.rule,
+        xiangqiTimeMode: room.xiangqiTimeMode,
         hostName: host ? host.name : 'Vô danh',
         playerCount: room.players.length,
         maxPlayers: 4,
@@ -87,7 +103,7 @@ export class RoomManager {
   }
 
   private generateRoomCode(rule: GameRule): string {
-    const prefix = rule === 'TIEN_LEN_MIEN_NAM' ? 'TL' : 'SL';
+    const prefix = rule === 'TIEN_LEN_MIEN_NAM' ? 'TL' : rule === 'SAM_LOC' ? 'SL' : 'CT';
     let code = '';
     let attempts = 0;
     do {

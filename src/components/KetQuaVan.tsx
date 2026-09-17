@@ -1,23 +1,27 @@
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { Trophy, RefreshCw, LogOut, Award, Flame } from 'lucide-react';
-import { GameResultRecord, GameRule } from '../types';
+import { Trophy, RefreshCw, LogOut, Award, Flame, BookOpen } from 'lucide-react';
+import { GameResultRecord, GameRule, PlayerPublicInfo } from '../types';
 import { CardView } from './CardView';
 
 interface KetQuaVanProps {
   results: GameResultRecord[];
+  players?: PlayerPublicInfo[];
   isHost: boolean;
   rule: GameRule;
   onPlayAgain: () => void;
   onLeaveRoom: () => void;
+  onOpenRules?: () => void;
 }
 
 export const KetQuaVan: React.FC<KetQuaVanProps> = ({
   results,
+  players,
   isHost,
   rule,
   onPlayAgain,
   onLeaveRoom,
+  onOpenRules,
 }) => {
   useEffect(() => {
     // Launch celebratory confetti
@@ -38,17 +42,30 @@ export const KetQuaVan: React.FC<KetQuaVanProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
       <div className="bg-slate-900 border border-amber-500/40 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header with Winner Announcement */}
-        <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 p-6 text-center text-slate-950 relative overflow-hidden">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-white/20 rounded-full mb-2 backdrop-blur-sm">
-            <Trophy className="w-8 h-8 text-slate-950 fill-slate-950" />
+        <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 p-4 sm:p-6 text-center text-slate-950 relative overflow-hidden">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 bg-white/20 rounded-full mb-1.5 sm:mb-2 backdrop-blur-sm">
+            <Trophy className="w-7 h-7 sm:w-8 sm:h-8 text-slate-950 fill-slate-950" />
           </div>
-          <h2 className="text-2xl font-black tracking-tight">KẾT QUẢ VÁN ĐẤU</h2>
-          <p className="text-xs font-bold text-slate-900 mt-1 uppercase tracking-wider">
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight">KẾT QUẢ VÁN ĐẤU</h2>
+          <p className="text-xs font-bold text-slate-900 mt-0.5 sm:mt-1 uppercase tracking-wider">
             {rule === 'TIEN_LEN_MIEN_NAM' ? '♠ Tiến Lên Miền Nam' : '🔥 Sâm Lốc'}
           </p>
           {winner && (
-            <div className="mt-2 bg-slate-950/20 inline-block px-4 py-1 rounded-full text-sm font-extrabold">
+            <div className="mt-2 bg-slate-950/20 inline-block px-4 py-1 rounded-full text-xs sm:text-sm font-extrabold">
               Chúc mừng {winner.playerName} ({winner.avatar}) về Nhất!
+            </div>
+          )}
+
+          {onOpenRules && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={onOpenRules}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-950/30 hover:bg-slate-950/50 text-slate-950 transition cursor-pointer touch-manipulation"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Xem quy định phạt &amp; mức trừ xu</span>
+              </button>
             </div>
           )}
         </div>
@@ -125,8 +142,24 @@ export const KetQuaVan: React.FC<KetQuaVanProps> = ({
                         : 'text-slate-400'
                     }`}
                   >
-                    {r.scoreChange > 0 ? `+${r.scoreChange}` : r.scoreChange} xu
+                    {r.scoreChange > 0
+                      ? `+${r.scoreChange.toLocaleString('vi-VN')}`
+                      : `${r.scoreChange.toLocaleString('vi-VN')}`}{' '}
+                    xu
                   </div>
+
+                  {(() => {
+                    const pInfo = players?.find((p) => p.id === r.playerId);
+                    if (pInfo && pInfo.score !== undefined) {
+                      return (
+                        <div className="text-[11px] font-bold text-amber-300 flex items-center gap-0.5">
+                          <span>💰 Ví:</span>
+                          <span className="font-extrabold">{pInfo.score.toLocaleString('vi-VN')} xu</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   {/* Show face-up remaining cards */}
                   {r.cardsLeftList.length > 0 && (
@@ -153,7 +186,7 @@ export const KetQuaVan: React.FC<KetQuaVanProps> = ({
             type="button"
             onClick={onLeaveRoom}
             id="btn-leave-room-result"
-            className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+            className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation"
           >
             <LogOut className="w-4 h-4" />
             <span>Rời phòng</span>
@@ -164,7 +197,7 @@ export const KetQuaVan: React.FC<KetQuaVanProps> = ({
               type="button"
               onClick={onPlayAgain}
               id="btn-play-again"
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/30 transition cursor-pointer"
+              className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-700/30 transition cursor-pointer touch-manipulation"
             >
               <RefreshCw className="w-4 h-4" />
               <span>Chơi ván tiếp theo</span>

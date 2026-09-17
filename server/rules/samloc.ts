@@ -1,5 +1,5 @@
 import { Card, AnalyzedHand, PlayedHand } from '../types';
-import { sortCards, getRankLabel } from '../cardUtils';
+import { sortCards, getRankLabel, SUIT_NAMES } from '../cardUtils';
 
 /**
  * ENGINE LUẬT CHƠI SÂM LỐC (XÂM LỐC)
@@ -21,10 +21,10 @@ export function analyzeSamLocHand(cards: Card[]): AnalyzedHand {
   const sorted = sortCards(cards);
   const len = sorted.length;
 
-  // 1. Rác (Lá đơn)
+  // 1. Lá đơn (ví dụ: "7 Rô", "3 Bích", "10 Tép", "A Cơ", "2 Cơ")
   if (len === 1) {
     const card = sorted[0];
-    const desc = card.rank === 15 ? 'Heo (2)' : `Rác ${getRankLabel(card.rank)}`;
+    const desc = `${getRankLabel(card.rank)} ${SUIT_NAMES[card.suit]}`;
     return {
       isValid: true,
       type: 'SINGLE',

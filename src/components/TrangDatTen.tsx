@@ -85,7 +85,7 @@ export const TrangDatTen: React.FC<TrangDatTenProps> = ({
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
               Chọn Avatar đại diện
             </label>
-            <div className="grid grid-cols-8 gap-2 p-2.5 bg-slate-950/60 rounded-xl border border-slate-800">
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 p-2.5 bg-slate-950/60 rounded-xl border border-slate-800">
               {AVATAR_LIST.map((emoji) => (
                 <button
                   key={emoji}
@@ -93,8 +93,8 @@ export const TrangDatTen: React.FC<TrangDatTenProps> = ({
                   id={`avatar-${emoji}`}
                   onClick={() => setSelectedAvatar(emoji)}
                   className={`
-                    w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all
-                    ${selectedAvatar === emoji ? 'bg-emerald-600 scale-110 shadow-md ring-2 ring-emerald-400' : 'hover:bg-slate-800 text-slate-400'}
+                    h-10 sm:h-9 rounded-lg flex items-center justify-center text-xl transition-all cursor-pointer touch-manipulation
+                    ${selectedAvatar === emoji ? 'bg-emerald-600 scale-105 shadow-md ring-2 ring-emerald-400' : 'hover:bg-slate-800 text-slate-400'}
                   `}
                 >
                   {emoji}
@@ -113,7 +113,7 @@ export const TrangDatTen: React.FC<TrangDatTenProps> = ({
                 type="button"
                 id="btn-random-name"
                 onClick={handleRandomName}
-                className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 font-medium transition-colors"
+                className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 font-medium transition-colors cursor-pointer touch-manipulation"
               >
                 <Sparkles className="w-3 h-3" />
                 Gợi ý tên hay
@@ -133,7 +133,7 @@ export const TrangDatTen: React.FC<TrangDatTenProps> = ({
                 }}
                 placeholder="Ví dụ: Thần Bài 88, Cậu Ba..."
                 maxLength={20}
-                className="w-full pl-10 pr-4 py-3 bg-slate-950/80 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 rounded-xl text-white placeholder-slate-500 text-sm outline-none transition"
+                className="w-full pl-10 pr-4 py-3 bg-slate-950/80 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 rounded-xl text-white placeholder-slate-500 text-base sm:text-sm outline-none transition"
               />
             </div>
             {error && (
@@ -159,7 +159,7 @@ export const TrangDatTen: React.FC<TrangDatTenProps> = ({
           <button
             type="submit"
             id="btn-enter-lobby"
-            className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white font-bold rounded-xl shadow-lg shadow-emerald-700/25 transition flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full min-h-[48px] py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.99] text-white font-bold rounded-xl shadow-lg shadow-emerald-700/25 transition flex items-center justify-center gap-2 cursor-pointer touch-manipulation"
           >
             <span>Vào Sảnh Chơi Ngay</span>
             <span className="text-lg leading-none">&rarr;</span>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Clock,
   LogOut,
@@ -44,10 +44,28 @@ export const BanChoi: React.FC<BanChoiProps> = ({
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [hasDismissedBaoSam, setHasDismissedBaoSam] = useState(false);
+
+  // Reset trạng thái ẩn dialog Báo Sâm khi ván mới bắt đầu hoặc hết giai đoạn Báo Sâm
+  useEffect(() => {
+    if (!roomState.samLocState?.isBaoSamPhase) {
+      setHasDismissedBaoSam(false);
+    }
+  }, [roomState.samLocState?.isBaoSamPhase, roomState.gameNumber]);
 
   const me = roomState.players.find((p) => p.id === myPlayerId);
   const isMyTurn = roomState.currentTurnPlayerId === myPlayerId;
   const isHost = me?.isHost || false;
+
+  // Proactively fetch cards if currently empty while game is playing
+  useEffect(() => {
+    if (playerCards.length === 0 && roomState.status === 'PLAYING') {
+      socket.emit('GAME_GET_MY_CARDS', {
+        roomCode: roomState.code,
+        playerId: myPlayerId,
+      });
+    }
+  }, [playerCards.length, roomState.status, roomState.code, myPlayerId]);
 
   // Relative seat arrangement so "Me" is always at the bottom!
   const myIndex = roomState.players.findIndex((p) => p.id === myPlayerId);
@@ -144,6 +162,8 @@ export const BanChoi: React.FC<BanChoiProps> = ({
   };
 
   const handleBaoSamChoice = (wantsBaoSam: boolean) => {
+    // Đóng dialog ngay lập tức cho riêng người chơi này
+    setHasDismissedBaoSam(true);
     socket.emit('GAME_BAO_SAM', {
       roomCode: roomState.code,
       playerId: myPlayerId,
@@ -201,6 +221,9 @@ export const BanChoi: React.FC<BanChoiProps> = ({
           <div className="text-xs font-bold text-white max-w-[90px] truncate">
             {player.name}
           </div>
+          <div className="text-[10px] text-amber-300 font-extrabold">
+            💰 {player.score !== undefined ? player.score.toLocaleString('vi-VN') : 0} xu
+          </div>
           {player.hasPassedCurrentRound && (
             <span className="text-[9px] font-bold text-slate-400 bg-slate-900/80 px-1.5 py-0.2 rounded">
               Đã bỏ lượt
@@ -231,36 +254,43 @@ export const BanChoi: React.FC<BanChoiProps> = ({
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col select-none overflow-hidden relative font-sans">
       {/* Table Top Header */}
-      <header className="h-12 bg-slate-950/80 border-b border-emerald-900/40 px-3 sm:px-6 flex items-center justify-between z-30">
-        <div className="flex items-center gap-3">
-          <div className="text-xs font-extrabold text-amber-400 bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">
+      <header className="min-h-12 py-1.5 bg-slate-950/90 border-b border-emerald-900/40 px-2 sm:px-6 flex items-center justify-between z-30 gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="text-xs font-extrabold text-amber-400 bg-slate-900 px-2 sm:px-2.5 py-1 rounded-lg border border-slate-700 shrink-0">
             {roomState.code}
           </div>
-          <span className="text-xs text-emerald-400 font-semibold hidden sm:inline">
+          <span className="text-xs text-emerald-400 font-semibold hidden md:inline">
             {roomState.rule === 'TIEN_LEN_MIEN_NAM' ? '♠ Tiến Lên Miền Nam' : '🔥 Sâm Lốc'} &bull; Ván #{roomState.gameNumber}
           </span>
+          <div className="flex items-center gap-1.5 bg-slate-900/90 border border-amber-500/30 px-2 py-1 rounded-lg text-xs font-bold text-amber-300 shrink-0">
+            <span>{playerMe?.avatar}</span>
+            <span className="text-white hidden sm:inline max-w-[80px] truncate">{playerMe?.name}:</span>
+            <span className="text-amber-400 font-extrabold">{playerMe?.score !== undefined ? playerMe.score.toLocaleString('vi-VN') : 0} xu</span>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setIsRuleModalOpen(true)}
             id="btn-rules-header"
-            className="p-1.5 sm:px-3 sm:py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition"
+            className="p-2 sm:px-3 sm:py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition touch-manipulation cursor-pointer"
+            title="Luật chơi"
           >
-            <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Luật</span>
+            <BookOpen className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Luật & Mức Phạt</span>
           </button>
 
           <button
             onClick={() => setIsChatOpen((v) => !v)}
             id="btn-toggle-chat"
-            className={`p-1.5 sm:px-3 sm:py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition ${
+            className={`p-2 sm:px-3 sm:py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition touch-manipulation cursor-pointer ${
               isChatOpen
                 ? 'bg-emerald-600 border-emerald-500 text-white'
                 : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
             }`}
+            title="Khung chat"
           >
-            <MessageSquare className="w-3.5 h-3.5" />
+            <MessageSquare className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             <span className="hidden sm:inline">Chat</span>
             {chatMessages.length > 0 && (
               <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
@@ -272,20 +302,21 @@ export const BanChoi: React.FC<BanChoiProps> = ({
           <button
             onClick={onLeaveRoom}
             id="btn-leave-table"
-            className="p-1.5 sm:px-3 sm:py-1 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 rounded-lg text-xs font-semibold text-rose-300 hover:text-rose-200 flex items-center gap-1.5 transition"
+            className="p-2 sm:px-3 sm:py-1 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 rounded-lg text-xs font-semibold text-rose-300 hover:text-rose-200 flex items-center gap-1.5 transition touch-manipulation cursor-pointer"
+            title="Rời bàn"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <LogOut className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             <span className="hidden sm:inline">Rời</span>
           </button>
         </div>
       </header>
 
       {/* Main Playing Area: Felt Card Table */}
-      <div className="flex-1 relative flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+      <div className="flex-1 relative flex items-center justify-center p-1 sm:p-4 overflow-hidden">
         {/* Felt Casino Table Canvas */}
-        <div className="w-full max-w-5xl h-full max-h-[720px] rounded-[40px] sm:rounded-[60px] bg-gradient-to-b from-emerald-800 via-emerald-900 to-teal-950 border-[10px] sm:border-[16px] border-amber-950/90 shadow-2xl relative flex flex-col justify-between p-3 sm:p-6 overflow-hidden">
+        <div className="w-full max-w-5xl h-full max-h-[720px] rounded-[24px] sm:rounded-[60px] bg-gradient-to-b from-emerald-800 via-emerald-900 to-teal-950 border-4 sm:border-[16px] border-amber-950/90 shadow-2xl relative flex flex-col justify-between p-2 sm:p-6 overflow-hidden">
           {/* Inner Golden Felt Border */}
-          <div className="absolute inset-2 sm:inset-3 rounded-[30px] sm:rounded-[48px] border-2 border-amber-400/20 pointer-events-none" />
+          <div className="absolute inset-1.5 sm:inset-3 rounded-[18px] sm:rounded-[48px] border sm:border-2 border-amber-400/20 pointer-events-none" />
 
           {/* Center Logo watermark */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10">
@@ -294,8 +325,10 @@ export const BanChoi: React.FC<BanChoiProps> = ({
             </span>
           </div>
 
-          {/* SÂM LỐC BÁO SÂM BANNER */}
-          {roomState.samLocState?.isBaoSamPhase && (
+          {/* SÂM LỐC BÁO SÂM BANNER - Chỉ hiển thị khi đang trong giai đoạn và người chơi này chưa chọn */}
+          {roomState.samLocState?.isBaoSamPhase &&
+            !hasDismissedBaoSam &&
+            !roomState.samLocState.respondedPlayerIds?.includes(myPlayerId) && (
             <div className="absolute top-16 inset-x-6 z-40 bg-slate-950/90 border-2 border-amber-500 p-3 sm:p-4 rounded-2xl shadow-2xl text-center animate-bounce">
               <div className="text-amber-400 font-extrabold text-sm sm:text-base flex items-center justify-center gap-2">
                 <Flame className="w-5 h-5 text-amber-500 animate-pulse" />
@@ -308,14 +341,14 @@ export const BanChoi: React.FC<BanChoiProps> = ({
                 <button
                   onClick={() => handleBaoSamChoice(true)}
                   id="btn-bao-sam-yes"
-                  className="px-5 py-2 bg-gradient-to-r from-amber-500 to-red-500 hover:from-amber-400 hover:to-red-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-lg transition"
+                  className="px-5 py-2 bg-gradient-to-r from-amber-500 to-red-500 hover:from-amber-400 hover:to-red-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-lg transition cursor-pointer"
                 >
                   🔥 BÁO SÂM!
                 </button>
                 <button
                   onClick={() => handleBaoSamChoice(false)}
                   id="btn-bao-sam-no"
-                  className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs sm:text-sm rounded-xl transition"
+                  className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs sm:text-sm rounded-xl transition cursor-pointer"
                 >
                   Không Báo
                 </button>
@@ -360,7 +393,7 @@ export const BanChoi: React.FC<BanChoiProps> = ({
                     : 'bg-slate-800 text-amber-300'
                 }`}
               >
-                {roomState.turnTimeRemaining}s
+                {Math.max(0, roomState.turnTimeRemaining)}s
               </span>
             </div>
 
@@ -383,7 +416,13 @@ export const BanChoi: React.FC<BanChoiProps> = ({
                     <Sparkles className="w-4 h-4" /> VÒNG ĐÁNH TỰ DO MỚI
                   </div>
                   <p className="text-[11px] text-emerald-200/80 mt-0.5">
-                    {isMyTurn ? 'Bạn đang giữ quyền đi đầu, hãy đánh bất kỳ bộ bài hợp lệ nào!' : 'Đang chờ người đi đầu đánh bài...'}
+                    {isMyTurn
+                      ? roomState.isFirstTurnOfGame && roomState.mustPlayThreeOfSpades
+                        ? '♠ Ván đầu tiên: Bạn có 3 Bích (3♠), hãy đánh bộ có chứa 3♠!'
+                        : roomState.isFirstTurnOfGame && !roomState.mustPlayThreeOfSpades && roomState.rule === 'TIEN_LEN_MIEN_NAM'
+                        ? '♠ Ván này không ai có 3 Bích: Bạn giữ lá nhỏ nhất và được đi trước tự do!'
+                        : 'Bạn đang giữ quyền đi đầu, hãy đánh bất kỳ bộ bài hợp lệ nào!'
+                      : 'Đang chờ người đi đầu đánh bài...'}
                   </p>
                 </div>
               )}
@@ -425,16 +464,20 @@ export const BanChoi: React.FC<BanChoiProps> = ({
                     <span>Bỏ chọn ({selectedCardIds.length})</span>
                   </button>
                 )}
+
+                <div className="hidden sm:flex items-center gap-1 px-2 py-1.5 bg-slate-900/80 border border-amber-500/20 rounded-xl text-[11px] font-extrabold text-amber-300">
+                  <span>💰 {playerMe?.score !== undefined ? playerMe.score.toLocaleString('vi-VN') : 0} xu</span>
+                </div>
               </div>
 
               {/* Play & Pass Buttons */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   type="button"
                   id="btn-pass-turn"
                   disabled={!isMyTurn || !roomState.lastPlayedHand}
                   onClick={handlePassTurn}
-                  className={`px-4 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition shadow-md ${
+                  className={`min-h-[42px] px-3.5 sm:px-6 py-2 rounded-xl text-xs sm:text-sm font-extrabold transition shadow-md touch-manipulation ${
                     isMyTurn && roomState.lastPlayedHand
                       ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer active:scale-95'
                       : 'bg-slate-900/50 text-slate-600 border border-slate-800 cursor-not-allowed'
@@ -448,7 +491,7 @@ export const BanChoi: React.FC<BanChoiProps> = ({
                   id="btn-play-cards"
                   disabled={!isMyTurn || selectedCardIds.length === 0}
                   onClick={handlePlayHand}
-                  className={`px-5 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-black transition shadow-lg ${
+                  className={`min-h-[42px] px-4 sm:px-8 py-2 rounded-xl text-xs sm:text-sm font-black transition shadow-lg touch-manipulation ${
                     isMyTurn && selectedCardIds.length > 0
                       ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-amber-500/30 cursor-pointer active:scale-95 animate-pulse'
                       : 'bg-slate-900/50 text-slate-600 border border-slate-800 cursor-not-allowed'
@@ -460,9 +503,9 @@ export const BanChoi: React.FC<BanChoiProps> = ({
             </div>
 
             {/* Fanned Cards In Hand */}
-            <div className="w-full overflow-x-auto no-scrollbar py-2 px-1 flex items-end justify-center -space-x-3 sm:-space-x-5 min-h-[96px] sm:min-h-[116px]">
+            <div className="w-full overflow-x-auto no-scrollbar py-2 px-2 flex items-end justify-start sm:justify-center -space-x-3.5 sm:-space-x-5 min-h-[85px] sm:min-h-[116px] touch-pan-x touch-manipulation">
               {sortedCards.length === 0 ? (
-                <div className="text-xs text-slate-400 italic py-4">
+                <div className="text-xs text-slate-400 italic py-4 w-full text-center">
                   {playerMe?.status === 'FINISHED' ? '🎉 Bạn đã hết bài!' : 'Đang chia bài...'}
                 </div>
               ) : (
@@ -505,10 +548,12 @@ export const BanChoi: React.FC<BanChoiProps> = ({
       {roomState.status === 'FINISHED' && roomState.results && (
         <KetQuaVan
           results={roomState.results}
+          players={roomState.players}
           isHost={isHost}
           rule={roomState.rule}
           onPlayAgain={handlePlayAgain}
           onLeaveRoom={onLeaveRoom}
+          onOpenRules={() => setIsRuleModalOpen(true)}
         />
       )}
     </div>

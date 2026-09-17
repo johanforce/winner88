@@ -8,6 +8,10 @@ import {
   ChatMessage,
   GameResultRecord,
   SamLocState,
+  XiangqiState,
+  XiangqiSide,
+  XiangqiMove,
+  XiangqiTimeMode,
 } from './types';
 import {
   createDeck,
@@ -16,8 +20,19 @@ import {
   hasThreeOfSpades,
   isThreeOfSpades,
   getRankLabel,
+  SUIT_SYMBOLS,
+  findPlayerWithThreeOfSpades,
+  findLowestCardPlayer,
 } from './cardUtils';
 import { analyzeHandByRule, canBeatByRule } from './rules';
+import {
+  createInitialXiangqiPieces,
+  getPieceAt,
+  getLegalMoves,
+  hasAnyLegalMoves,
+  isSideInCheck,
+  generateMoveNotation,
+} from './xiangqiLogic';
 
 export class GameRoom {
   public code: string;
@@ -33,18 +48,52 @@ export class GameRoom {
   public gameNumber: number = 0;
   public lastRoundWinnerId: string | null = null;
   public isFirstTurnOfGame: boolean = false;
+  public mustPlayThreeOfSpades: boolean = false;
   public roundWinners: string[] = []; // player IDs in finish order
   public chatMessages: ChatMessage[] = [];
   public results?: GameResultRecord[];
   public samLocState?: SamLocState;
+  public xiangqiState?: XiangqiState;
+  public xiangqiTimeMode: XiangqiTimeMode = 'STANDARD';
 
   private timerInterval: NodeJS.Timeout | null = null;
+  private disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
   private onStateChange: () => void;
+  private onPlayerRemoved?: (playerId: string, isEmpty: boolean) => void;
 
-  constructor(code: string, rule: GameRule, onStateChange: () => void) {
+  constructor(
+    code: string,
+    rule: GameRule,
+    onStateChange: () => void,
+    xiangqiTimeMode: XiangqiTimeMode = 'STANDARD',
+    onPlayerRemoved?: (playerId: string, isEmpty: boolean) => void
+  ) {
     this.code = code;
     this.rule = rule;
     this.onStateChange = onStateChange;
+    this.xiangqiTimeMode = xiangqiTimeMode;
+    this.onPlayerRemoved = onPlayerRemoved;
+  }
+
+  public setXiangqiTimeMode(
+    playerId: string,
+    timeMode: XiangqiTimeMode
+  ): { success: boolean; message?: string } {
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player || !player.isHost) {
+      return { success: false, message: 'Chỉ chủ phòng mới có quyền đổi chế độ thời gian' };
+    }
+    if (this.status === 'PLAYING') {
+      return { success: false, message: 'Không thể đổi chế độ thời gian khi trận đấu đang diễn ra' };
+    }
+    this.xiangqiTimeMode = timeMode;
+    const desc =
+      timeMode === 'STANDARD'
+        ? 'Cờ Tiêu Chuẩn Quốc Tế (60 phút + 30 giây tích lũy/nước WXF)'
+        : 'Cờ Chớp 5 phút (+ 3 giây tích lũy/nước)';
+    this.addSystemChat(`⚙️ Chủ phòng đã chuyển chế độ Cờ Tướng sang: ${desc}.`);
+    this.onStateChange();
+    return { success: true };
   }
 
   // --- QUẢN LÝ NGƯỜI CHƠI ---
@@ -54,30 +103,105 @@ export class GameRoom {
     socketId: string,
     name: string,
     avatar: string,
-    reconnectToken: string
+    reconnectToken: string,
+    initialScore?: number
   ): { success: boolean; message?: string } {
     // Check if player is reconnecting
     const existingIndex = this.players.findIndex((p) => p.id === id);
     if (existingIndex !== -1) {
       const existing = this.players[existingIndex];
+      const wasDisconnected =
+        existing.status === 'DISCONNECTED' ||
+        existing.disconnectedAt !== null ||
+        !existing.socketId;
+
+      // Hủy timer ngắt kết nối hoàn toàn nếu người chơi đã kết nối lại kịp thời
+      const pendingDisconnectTimer = this.disconnectTimers.get(id);
+      if (pendingDisconnectTimer) {
+        clearTimeout(pendingDisconnectTimer);
+        this.disconnectTimers.delete(id);
+      }
+
       existing.socketId = socketId;
-      existing.status = this.status === 'PLAYING' ? 'PLAYING' : 'WAITING';
+      if (existing.status === 'DISCONNECTED') {
+        existing.status = this.status === 'PLAYING' ? 'PLAYING' : 'WAITING';
+      }
       existing.disconnectedAt = null;
-      this.addSystemChat(`${existing.name} đã kết nối lại.`);
+      if (typeof initialScore === 'number' && !isNaN(initialScore)) {
+        if (typeof existing.score !== 'number' || (this.status === 'WAITING' && initialScore !== existing.score)) {
+          existing.score = initialScore;
+        }
+      }
+
+      // Đã bỏ thông báo "đã kết nối lại" ở khung chat theo yêu cầu
       this.onStateChange();
       return { success: true };
     }
 
-    if (this.players.length >= 4) {
-      return { success: false, message: 'Phòng đã đầy (tối đa 4 người)' };
+    const maxPlayers = this.rule === 'CO_TUONG' ? 8 : 4;
+    if (this.players.length >= maxPlayers) {
+      return { success: false, message: `Phòng đã đầy (tối đa ${maxPlayers} người)` };
     }
 
+    const startScore =
+      typeof initialScore === 'number' && !isNaN(initialScore) && initialScore >= 0
+        ? initialScore
+        : 1000;
+
+    // Nếu là Cờ Tướng và phòng đang trong trận đấu: cho phép vào theo dõi trực tiếp (Spectator)
     if (this.status === 'PLAYING') {
+      if (this.rule === 'CO_TUONG') {
+        const takenSeats = new Set(this.players.map((p) => p.seatIndex));
+        const spectatorSlots = [2, 3, 4, 5, 6, 7];
+        const spectatorSeat = spectatorSlots.find((s) => !takenSeats.has(s)) ?? this.players.length;
+
+        const newSpectator: Player = {
+          id,
+          socketId,
+          name,
+          avatar,
+          isHost: false,
+          status: 'PLAYING',
+          cards: [],
+          seatIndex: spectatorSeat,
+          hasPassedCurrentRound: false,
+          disconnectedAt: null,
+          reconnectToken,
+          score: startScore,
+          isSpectator: true,
+        };
+
+        this.players.push(newSpectator);
+        if (this.xiangqiState && !this.xiangqiState.spectatorIds.includes(id)) {
+          this.xiangqiState.spectatorIds.push(id);
+        }
+        this.addSystemChat(`👁️ ${name} đã vào phòng theo dõi trận đấu.`);
+        this.onStateChange();
+        return { success: true };
+      }
       return { success: false, message: 'Ván đấu đang diễn ra, vui lòng đợi ván kết thúc' };
     }
 
     const isHost = this.players.length === 0;
-    const seatIndex = this.findAvailableSeat();
+    let seatIndex = this.findAvailableSeat();
+    let isSpectator = false;
+    let xiangqiSide: XiangqiSide | undefined = undefined;
+
+    if (this.rule === 'CO_TUONG') {
+      const takenSeats = new Set(this.players.map((p) => p.seatIndex));
+      if (!takenSeats.has(0)) {
+        seatIndex = 0;
+        xiangqiSide = 'RED';
+      } else if (!takenSeats.has(1)) {
+        seatIndex = 1;
+        xiangqiSide = 'BLACK';
+      } else {
+        const spectatorSlots = [2, 3, 4, 5, 6, 7];
+        const freeSpectator = spectatorSlots.find((s) => !takenSeats.has(s)) ?? this.players.length;
+        seatIndex = freeSpectator;
+        isSpectator = true;
+      }
+    }
 
     const newPlayer: Player = {
       id,
@@ -91,11 +215,61 @@ export class GameRoom {
       hasPassedCurrentRound: false,
       disconnectedAt: null,
       reconnectToken,
-      score: 1000,
+      score: startScore,
+      isSpectator,
+      xiangqiSide,
     };
 
     this.players.push(newPlayer);
-    this.addSystemChat(`${name} đã vào phòng.`);
+    if (this.rule === 'CO_TUONG') {
+      if (seatIndex === 0) {
+        this.addSystemChat(`${name} đã vào phòng (Kỳ thủ Đỏ).`);
+      } else if (seatIndex === 1) {
+        this.addSystemChat(`${name} đã vào phòng (Kỳ thủ Đen).`);
+      } else {
+        this.addSystemChat(`👁️ ${name} đã vào phòng (Khán giả theo dõi).`);
+      }
+    } else {
+      this.addSystemChat(`${name} đã vào phòng.`);
+    }
+    this.onStateChange();
+    return { success: true };
+  }
+
+  public switchSeat(playerId: string, targetSeatIndex: number): { success: boolean; message?: string } {
+    if (this.status === 'PLAYING') {
+      return { success: false, message: 'Không thể đổi vị trí khi trận đấu đang diễn ra' };
+    }
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player) return { success: false, message: 'Không tìm thấy người chơi' };
+
+    const maxSeatIndex = this.rule === 'CO_TUONG' ? 7 : 3;
+    if (targetSeatIndex < 0 || targetSeatIndex > maxSeatIndex) {
+      return { success: false, message: 'Vị trí không hợp lệ' };
+    }
+
+    const isSeatOccupied = this.players.some((p) => p.seatIndex === targetSeatIndex && p.id !== playerId);
+    if (isSeatOccupied) {
+      return { success: false, message: 'Vị trí này đã có người ngồi' };
+    }
+
+    player.seatIndex = targetSeatIndex;
+    if (this.rule === 'CO_TUONG') {
+      if (targetSeatIndex === 0) {
+        player.isSpectator = false;
+        player.xiangqiSide = 'RED';
+        this.addSystemChat(`${player.name} đã chọn vị trí Kỳ thủ Đỏ (Đi trước).`);
+      } else if (targetSeatIndex === 1) {
+        player.isSpectator = false;
+        player.xiangqiSide = 'BLACK';
+        this.addSystemChat(`${player.name} đã chọn vị trí Kỳ thủ Đen (Đi sau).`);
+      } else {
+        player.isSpectator = true;
+        player.xiangqiSide = undefined;
+        this.addSystemChat(`👁️ ${player.name} đã chuyển sang vị trí Khán giả theo dõi.`);
+      }
+    }
+
     this.onStateChange();
     return { success: true };
   }
@@ -107,7 +281,23 @@ export class GameRoom {
     player.socketId = null;
     player.disconnectedAt = Date.now();
     player.status = 'DISCONNECTED';
-    this.addSystemChat(`${player.name} bị mất kết nối (giữ chỗ 60s).`);
+
+    // Hủy timer ngắt kết nối cũ nếu có
+    const prevTimer = this.disconnectTimers.get(player.id);
+    if (prevTimer) {
+      clearTimeout(prevTimer);
+    }
+
+    // Thiết lập bộ đếm 60 giây: nếu quá 60s không kết nối lại -> coi như disconnect hẳn và loại khỏi phòng
+    const timer = setTimeout(() => {
+      this.disconnectTimers.delete(player.id);
+      const target = this.players.find((p) => p.id === player.id);
+      if (target && target.status === 'DISCONNECTED') {
+        this.removePlayer(target.id, 'DISCONNECTED');
+      }
+    }, 60000);
+
+    this.disconnectTimers.set(player.id, timer);
 
     // If waiting in lobby and host disconnects, transfer host immediately
     if (this.status === 'WAITING' && player.isHost) {
@@ -117,16 +307,30 @@ export class GameRoom {
     this.onStateChange();
   }
 
-  public removePlayer(playerId: string): boolean {
+  public removePlayer(playerId: string, reason: 'LEAVE' | 'DISCONNECTED' = 'LEAVE'): boolean {
+    const timer = this.disconnectTimers.get(playerId);
+    if (timer) {
+      clearTimeout(timer);
+      this.disconnectTimers.delete(playerId);
+    }
+
     const index = this.players.findIndex((p) => p.id === playerId);
     if (index === -1) return false;
 
     const player = this.players[index];
     const wasHost = player.isHost;
     this.players.splice(index, 1);
-    this.addSystemChat(`${player.name} đã rời phòng.`);
 
-    if (this.players.length === 0) {
+    if (reason === 'DISCONNECTED') {
+      this.addSystemChat(`${player.name} đã ngắt kết nối và rời phòng.`);
+    } else {
+      this.addSystemChat(`${player.name} đã rời phòng.`);
+    }
+
+    const isEmpty = this.players.length === 0;
+    this.onPlayerRemoved?.(playerId, isEmpty);
+
+    if (isEmpty) {
       this.stopTimer();
       return true; // Room empty
     }
@@ -137,6 +341,33 @@ export class GameRoom {
 
     // If playing and players < 2, end game
     if (this.status === 'PLAYING') {
+      if (this.rule === 'CO_TUONG') {
+        if (player.isSpectator) {
+          if (this.xiangqiState) {
+            this.xiangqiState.spectatorIds = this.xiangqiState.spectatorIds.filter((id) => id !== playerId);
+          }
+          this.onStateChange();
+          return false;
+        }
+
+        // Nếu một trong 2 kỳ thủ đang đấu thoát phòng hoặc ngắt kết nối hẳn, kỳ thủ còn lại thắng
+        const otherPlayer = this.players.find((p) => !p.isSpectator);
+        this.stopTimer();
+        this.status = 'FINISHED';
+        if (this.xiangqiState) {
+          const winnerSide = player.xiangqiSide === 'RED' ? 'BLACK' : 'RED';
+          this.xiangqiState.winnerSide = winnerSide;
+          this.xiangqiState.winReason = 'RESIGN';
+        }
+        if (reason === 'DISCONNECTED') {
+          this.addSystemChat(`Kỳ thủ ${player.name} đã mất kết nối. ${otherPlayer?.name || 'Đối thủ'} giành chiến thắng!`);
+        } else {
+          this.addSystemChat(`Kỳ thủ ${player.name} đã rời phòng. ${otherPlayer?.name || 'Đối thủ'} giành chiến thắng!`);
+        }
+        this.onStateChange();
+        return false;
+      }
+
       if (this.players.length < 2) {
         this.status = 'WAITING';
         this.stopTimer();
@@ -175,7 +406,8 @@ export class GameRoom {
 
   private findAvailableSeat(): number {
     const takenSeats = new Set(this.players.map((p) => p.seatIndex));
-    for (let i = 0; i < 4; i++) {
+    const max = this.rule === 'CO_TUONG' ? 8 : 4;
+    for (let i = 0; i < max; i++) {
       if (!takenSeats.has(i)) return i;
     }
     return this.players.length;
@@ -189,8 +421,67 @@ export class GameRoom {
       return { success: false, message: 'Chỉ chủ phòng mới có quyền bắt đầu ván đấu' };
     }
 
-    const activePlayers = this.players.filter((p) => p.status !== 'DISCONNECTED');
-    if (activePlayers.length < 2) {
+    if (this.rule === 'CO_TUONG') {
+      const redPlayer = this.players.find((p) => p.seatIndex === 0 && !p.isSpectator);
+      const blackPlayer = this.players.find((p) => p.seatIndex === 1 && !p.isSpectator);
+
+      if (!redPlayer || !blackPlayer) {
+        return {
+          success: false,
+          message: 'Cần đủ 2 kỳ thủ ở vị trí Đỏ (ghế 1) và Đen (ghế 2) để bắt đầu trận cờ chớp!',
+        };
+      }
+
+      this.gameNumber += 1;
+      this.status = 'PLAYING';
+      this.results = undefined;
+
+      const isStandard = this.xiangqiTimeMode === 'STANDARD';
+      // Cờ Tiêu Chuẩn Quốc Tế WXF: 60 phút (3600s) + 30s tích lũy/nước
+      // Cờ Chớp: 5 phút (300s) + 3s tích lũy/nước
+      const initialSeconds = isStandard ? 3600 : 300;
+      const incrementSeconds = isStandard ? 30 : 3;
+
+      this.xiangqiState = {
+        pieces: createInitialXiangqiPieces(),
+        currentSide: 'RED',
+        redPlayerId: redPlayer.id,
+        blackPlayerId: blackPlayer.id,
+        spectatorIds: this.players.filter((p) => p.isSpectator).map((p) => p.id),
+        redTimeRemaining: initialSeconds,
+        blackTimeRemaining: initialSeconds,
+        initialBlitzTime: initialSeconds,
+        timeMode: this.xiangqiTimeMode,
+        incrementSeconds,
+        lastMove: null,
+        moveHistory: [],
+        isCheck: false,
+        checkSide: null,
+        winnerSide: null,
+        winReason: undefined,
+        drawOfferFrom: null,
+      };
+
+      this.currentTurnPlayerId = redPlayer.id;
+
+      this.players.forEach((p) => {
+        p.status = 'PLAYING';
+      });
+
+      const modeTitle = isStandard
+        ? '🏆 CỜ TIÊU CHUẨN QUỐC TẾ (60 phút + 30s/nước WXF)'
+        : '⚡ CỜ CHỚP 5 PHÚT (+ 3s/nước)';
+
+      this.addSystemChat(
+        `${modeTitle} chính thức bắt đầu! Đỏ (${redPlayer.name}) vs Đen (${blackPlayer.name}).`
+      );
+
+      this.startXiangqiBlitzTimer();
+      this.onStateChange();
+      return { success: true };
+    }
+
+    if (this.players.length < 2) {
       return { success: false, message: 'Cần ít nhất 2 người chơi để bắt đầu' };
     }
 
@@ -202,7 +493,7 @@ export class GameRoom {
     this.results = undefined;
     this.isFirstTurnOfGame = true;
 
-    // Reset player round status
+    // Reset player round status and activate all players currently in the room
     this.players.forEach((p) => {
       p.status = 'PLAYING';
       p.hasPassedCurrentRound = false;
@@ -210,11 +501,11 @@ export class GameRoom {
       delete p.rank;
     });
 
-    // Tạo & chia bài
+    // Tạo & chia bài cho toàn bộ người chơi trong phòng
     const deck = shuffleDeck(createDeck());
     const cardCountPerPlayer = this.rule === 'SAM_LOC' ? 10 : 13;
 
-    activePlayers.forEach((player, idx) => {
+    this.players.forEach((player, idx) => {
       const playerCards = deck.slice(idx * cardCountPerPlayer, (idx + 1) * cardCountPerPlayer);
       player.cards = sortCards(playerCards);
     });
@@ -222,20 +513,37 @@ export class GameRoom {
     // Xác định người đi đầu tiên
     if (this.rule === 'TIEN_LEN_MIEN_NAM') {
       if (this.gameNumber === 1 || !this.lastRoundWinnerId) {
-        // Ván đầu: Ai có 3 bích được đi trước
-        let foundFirstPlayer: Player | null = null;
-        for (const p of activePlayers) {
-          if (hasThreeOfSpades(p.cards)) {
-            foundFirstPlayer = p;
-            break;
+        // Ván đầu: Tìm xem có người chơi nào cầm 3 bích (3♠) không
+        const pWith3Spades = findPlayerWithThreeOfSpades(this.players);
+        if (pWith3Spades) {
+          this.currentTurnPlayerId = pWith3Spades.id;
+          this.isFirstTurnOfGame = true;
+          this.mustPlayThreeOfSpades = true;
+          this.addSystemChat(`♠ Ván đầu: ${pWith3Spades.name} giữ 3 Bích (3♠) được quyền đi đầu (bắt buộc đánh bộ có 3♠).`);
+        } else {
+          // Bàn chơi 2-3 người: Không ai cầm 3 Bích (nằm trong phần bài thừa chưa chia)
+          // Người có lá bài nhỏ nhất trong tất cả người chơi được quyền đi trước và đánh bài tự do
+          const lowest = findLowestCardPlayer(this.players);
+          if (lowest) {
+            this.currentTurnPlayerId = lowest.player.id;
+            this.isFirstTurnOfGame = true;
+            this.mustPlayThreeOfSpades = false;
+            const cardName = `${getRankLabel(lowest.lowestCard.rank)}${SUIT_SYMBOLS[lowest.lowestCard.suit]}`;
+            this.addSystemChat(
+              `♠ Ván này không ai có 3 Bích. ${lowest.player.name} có lá bài nhỏ nhất (${cardName}) được quyền đi trước tự do!`
+            );
+          } else {
+            this.currentTurnPlayerId = this.players[0].id;
+            this.isFirstTurnOfGame = false;
+            this.mustPlayThreeOfSpades = false;
           }
         }
-        this.currentTurnPlayerId = foundFirstPlayer ? foundFirstPlayer.id : activePlayers[0].id;
       } else {
         // Ván sau: Người thắng ván trước đi đầu
-        const winner = activePlayers.find((p) => p.id === this.lastRoundWinnerId);
-        this.currentTurnPlayerId = winner ? winner.id : activePlayers[0].id;
+        const winner = this.players.find((p) => p.id === this.lastRoundWinnerId);
+        this.currentTurnPlayerId = winner ? winner.id : this.players[0].id;
         this.isFirstTurnOfGame = false;
+        this.mustPlayThreeOfSpades = false;
       }
       this.startTurnTimer();
     } else {
@@ -244,8 +552,9 @@ export class GameRoom {
         isBaoSamPhase: true,
         baoSamTimeRemaining: 8,
         baoSamPlayerId: null,
+        respondedPlayerIds: [],
       };
-      this.startBaoSamTimer(activePlayers);
+      this.startBaoSamTimer(this.players);
     }
 
     const firstPlayer = this.players.find((p) => p.id === this.currentTurnPlayerId);
@@ -281,15 +590,37 @@ export class GameRoom {
     const player = this.players.find((p) => p.id === playerId);
     if (!player) return;
 
+    if (!this.samLocState.respondedPlayerIds) {
+      this.samLocState.respondedPlayerIds = [];
+    }
+    if (!this.samLocState.respondedPlayerIds.includes(playerId)) {
+      this.samLocState.respondedPlayerIds.push(playerId);
+    }
+
     if (wantsBaoSam) {
       this.samLocState.baoSamPlayerId = playerId;
       this.addSystemChat(`🔥 ${player.name} ĐÃ BÁO SÂM! Sẽ đánh đầu tiên.`);
+      this.finishBaoSamPhase(this.players);
+      return;
     }
+
+    // Nếu tất cả người chơi đang thi đấu đều đã phản hồi (đều chọn Không Báo)
+    const activePlayers = this.players.filter((p) => !p.isSpectator && p.status === 'PLAYING');
+    const allResponded = activePlayers.every((p) =>
+      this.samLocState?.respondedPlayerIds?.includes(p.id)
+    );
+
+    if (allResponded) {
+      this.finishBaoSamPhase(this.players);
+      return;
+    }
+
     this.onStateChange();
   }
 
-  private finishBaoSamPhase(activePlayers: Player[]) {
+  private finishBaoSamPhase(players: Player[] = this.players) {
     if (!this.samLocState) return;
+    this.stopTimer();
     this.samLocState.isBaoSamPhase = false;
 
     if (this.samLocState.baoSamPlayerId) {
@@ -298,13 +629,13 @@ export class GameRoom {
       this.addSystemChat(`Người chơi ${p?.name} Báo Sâm bắt đầu đánh.`);
     } else {
       // Không ai báo sâm: người thắng ván trước hoặc người có bài nhỏ nhất đi trước
-      if (this.lastRoundWinnerId && activePlayers.some((p) => p.id === this.lastRoundWinnerId)) {
+      if (this.lastRoundWinnerId && players.some((p) => p.id === this.lastRoundWinnerId)) {
         this.currentTurnPlayerId = this.lastRoundWinnerId;
       } else {
         // Tìm người có lá bài nhỏ nhất
-        let minCardPlayer = activePlayers[0];
+        let minCardPlayer = players[0];
         let minRank = 99;
-        for (const p of activePlayers) {
+        for (const p of players) {
           if (p.cards.length > 0 && p.cards[0].rank < minRank) {
             minRank = p.cards[0].rank;
             minCardPlayer = p;
@@ -348,11 +679,11 @@ export class GameRoom {
       playedCards.push(card);
     }
 
-    // Kiểm tra lượt đầu tiên của ván: có bắt buộc phải chứa 3 Bích không
-    if (this.rule === 'TIEN_LEN_MIEN_NAM' && this.isFirstTurnOfGame && this.gameNumber === 1) {
+    // Kiểm tra lượt đầu tiên của ván: CHỈ bắt buộc chứa 3 Bích NẾU có người chơi cầm 3 Bích trong phòng
+    if (this.rule === 'TIEN_LEN_MIEN_NAM' && this.isFirstTurnOfGame && this.mustPlayThreeOfSpades) {
       const has3Spade = playedCards.some(isThreeOfSpades);
       if (!has3Spade) {
-        return { success: false, message: 'Ván đầu tiên bắt buộc phải đánh bộ có chứa 3 Bích (3♠)!' };
+        return { success: false, message: 'Bạn đang giữ 3 Bích (3♠), lượt đầu bắt buộc phải đánh bộ có chứa 3 Bích!' };
       }
     }
 
@@ -386,28 +717,19 @@ export class GameRoom {
     this.lastPlayedHand = playedHand;
     this.roundHistory.push(playedHand);
     this.isFirstTurnOfGame = false;
+    this.mustPlayThreeOfSpades = false;
     player.hasPassedCurrentRound = false;
 
     this.addSystemChat(`${player.name} đánh: ${analyzed.description}`);
 
-    // Kiểm tra người này đã hết bài chưa
+    // Kiểm tra người này đã hết bài chưa (Về Nhất -> Kết thúc ngay ván bài)
     if (player.cards.length === 0) {
       player.status = 'FINISHED';
-      this.roundWinners.push(player.id);
-      player.rank = this.roundWinners.length;
-      const rankTitle = player.rank === 1 ? '🥇 Nhất' : player.rank === 2 ? '🥈 Nhì' : '🥉 Ba';
-      this.addSystemChat(`🎉 ${player.name} đã hết bài (${rankTitle})!`);
-
-      // Kiểm tra xem ván đấu đã kết thúc chưa
-      const remainingWithCards = this.players.filter(
-        (p) => p.cards.length > 0 && p.status !== 'DISCONNECTED'
-      );
-
-      // Nếu chỉ còn 1 người hoặc luật Sâm Lốc (ai về nhất kết thúc luôn)
-      if (remainingWithCards.length <= 1 || this.rule === 'SAM_LOC') {
-        this.finishGame();
-        return { success: true };
-      }
+      this.roundWinners = [player.id];
+      player.rank = 1;
+      this.addSystemChat(`🎉 ${player.name} đã đánh hết bài và giành chiến thắng Nhất!`);
+      this.finishGame();
+      return { success: true };
     }
 
     // Chuyển lượt cho người tiếp theo
@@ -540,6 +862,7 @@ export class GameRoom {
   }
 
   private handleTurnTimeout() {
+    this.stopTimer();
     if (!this.currentTurnPlayerId) return;
     const player = this.players.find((p) => p.id === this.currentTurnPlayerId);
     if (!player) return;
@@ -553,7 +876,13 @@ export class GameRoom {
       // Đang có lượt đánh mới tự do, tự động đánh 1 lá nhỏ nhất để không bị kẹt game!
       if (player.cards.length > 0) {
         const lowestCard = player.cards[0];
-        this.playHand(player.id, [lowestCard.id]);
+        const res = this.playHand(player.id, [lowestCard.id]);
+        if (!res.success) {
+          // Fallback an toàn nếu playHand không thành công
+          this.isFirstTurnOfGame = false;
+          this.mustPlayThreeOfSpades = false;
+          this.advanceToNextTurn();
+        }
       } else {
         this.advanceToNextTurn();
       }
@@ -566,41 +895,76 @@ export class GameRoom {
     this.stopTimer();
     this.status = 'FINISHED';
 
-    // Xếp hạng những người còn bài
-    const losers = this.players.filter((p) => p.cards.length > 0);
-    // Sắp xếp người thua theo số lá bài ít hơn
-    losers.sort((a, b) => a.cards.length - b.cards.length);
-    losers.forEach((p) => {
-      this.roundWinners.push(p.id);
-      p.rank = this.roundWinners.length;
-    });
+    // Xác định người về Nhất
+    let winnerId = this.roundWinners[0];
+    if (!winnerId) {
+      const remaining = this.players.filter((p) => p.status !== 'DISCONNECTED');
+      if (remaining.length > 0) {
+        remaining.sort((a, b) => a.cards.length - b.cards.length);
+        winnerId = remaining[0].id;
+        this.roundWinners = [winnerId];
+      } else {
+        winnerId = this.players[0]?.id;
+      }
+    }
 
-    const winnerId = this.roundWinners[0];
     this.lastRoundWinnerId = winnerId;
     const winner = this.players.find((p) => p.id === winnerId);
+    if (winner) {
+      winner.rank = 1;
+    }
 
-    // Tính điểm và lập bản tổng kết
-    const results: GameResultRecord[] = this.players.map((p) => {
-      const isWinner = p.id === winnerId;
+    // Những người chơi còn lại là người thua (xếp hạng theo số lá bài còn ít hơn)
+    const losers = this.players.filter((p) => p.id !== winnerId);
+    losers.sort((a, b) => a.cards.length - b.cards.length);
+    losers.forEach((p, idx) => {
+      p.rank = idx + 2;
+    });
+
+    let totalWonByWinner = 0;
+
+    // Tính điểm trừ phạt cho từng người thua
+    const loserResults: GameResultRecord[] = losers.map((p) => {
       const initialCardsCount = this.rule === 'SAM_LOC' ? 10 : 13;
       const isCong = p.cards.length === initialCardsCount;
-      const has2 = p.cards.some((c) => c.rank === 15);
+      const blackHeoCount = p.cards.filter(
+        (c) => c.rank === 15 && (c.suit === 'SPADE' || c.suit === 'CLUB')
+      ).length;
+      const redHeoCount = p.cards.filter(
+        (c) => c.rank === 15 && (c.suit === 'DIAMOND' || c.suit === 'HEART')
+      ).length;
+      const has2 = blackHeoCount + redHeoCount > 0;
 
-      let scoreChange = 0;
-      if (isWinner) {
-        // Người thắng nhận điểm
-        const totalOtherCards = this.players
-          .filter((x) => x.id !== p.id)
-          .reduce((sum, x) => sum + x.cards.length * 10, 0);
-        scoreChange = totalOtherCards;
-      } else {
-        // Người thua bị trừ điểm theo số lá bài còn lại
-        scoreChange = -p.cards.length * 10;
-        if (isCong) scoreChange -= 50; // Phạt cóng
-        if (has2) scoreChange -= 30; // Thối heo
+      // Mỗi lá bài còn lại bị phạt 10 xu (tối thiểu 10 xu cho người thua)
+      let penalty = Math.max(10, p.cards.length * 10);
+
+      // Phạt cóng (chưa ra được lá nào)
+      if (isCong) {
+        penalty += 50;
       }
 
-      p.score = Math.max(0, p.score + scoreChange);
+      // Phạt thối heo (heo đen 30 xu, heo đỏ 60 xu)
+      if (blackHeoCount > 0) {
+        penalty += blackHeoCount * 30;
+      }
+      if (redHeoCount > 0) {
+        penalty += redHeoCount * 60;
+      }
+
+      // Luật Sâm Lốc: Báo Sâm
+      if (this.rule === 'SAM_LOC' && this.samLocState?.baoSamPlayerId) {
+        if (this.samLocState.baoSamPlayerId === winnerId) {
+          // Người báo sâm về nhất -> thắng Sâm: mỗi người đền 200 xu
+          penalty = 200;
+        } else if (p.id === this.samLocState.baoSamPlayerId) {
+          // Báo sâm thất bại (bị đền sâm cho cả phòng)
+          penalty = 200 * Math.max(1, this.players.length - 1);
+        }
+      }
+
+      // Trừ điểm của người thua
+      p.score = Math.max(0, p.score - penalty);
+      totalWonByWinner += penalty;
 
       return {
         playerId: p.id,
@@ -609,14 +973,33 @@ export class GameRoom {
         rank: p.rank || 4,
         cardsLeft: p.cards.length,
         cardsLeftList: [...p.cards],
-        scoreChange,
+        scoreChange: -penalty,
         isCong,
         isThoiHeo: has2,
       };
     });
 
-    this.results = results.sort((a, b) => a.rank - b.rank);
-    this.addSystemChat(`🏆 Ván đấu kết thúc! Chúc mừng ${winner?.name} giành vị trí Nhất!`);
+    // Cộng toàn bộ tiền phạt từ các người thua cho người về Nhất
+    if (winner) {
+      winner.score += totalWonByWinner;
+    }
+
+    const winnerResult: GameResultRecord = {
+      playerId: winner ? winner.id : winnerId,
+      playerName: winner ? winner.name : 'Người thắng',
+      avatar: winner ? winner.avatar : '👑',
+      rank: 1,
+      cardsLeft: 0,
+      cardsLeftList: [],
+      scoreChange: totalWonByWinner,
+      isCong: false,
+      isThoiHeo: false,
+    };
+
+    this.results = [winnerResult, ...loserResults].sort((a, b) => a.rank - b.rank);
+    this.addSystemChat(
+      `🏆 Ván đấu kết thúc! Chúc mừng ${winner?.name} giành vị trí Nhất (+${totalWonByWinner} xu)!`
+    );
     this.onStateChange();
   }
 
@@ -641,6 +1024,10 @@ export class GameRoom {
   }
 
   public addSystemChat(text: string) {
+    const lastMsg = this.chatMessages[this.chatMessages.length - 1];
+    if (lastMsg && lastMsg.isSystem && lastMsg.text === text && Date.now() - lastMsg.timestamp < 3000) {
+      return;
+    }
     const msg: ChatMessage = {
       id: Math.random().toString(36).substring(2, 9),
       senderId: 'SYSTEM',
@@ -652,6 +1039,387 @@ export class GameRoom {
     };
     this.chatMessages.push(msg);
     if (this.chatMessages.length > 50) this.chatMessages.shift();
+  }
+
+  // --- CỜ TƯỚNG (XIANGQI) BLITZ LOGIC ---
+
+  private startXiangqiBlitzTimer() {
+    this.stopTimer();
+
+    this.timerInterval = setInterval(() => {
+      if (this.status !== 'PLAYING' || !this.xiangqiState || this.xiangqiState.winnerSide) {
+        this.stopTimer();
+        return;
+      }
+
+      if (this.xiangqiState.currentSide === 'RED') {
+        this.xiangqiState.redTimeRemaining -= 1;
+        if (this.xiangqiState.redTimeRemaining <= 0) {
+          this.xiangqiState.redTimeRemaining = 0;
+          this.handleXiangqiTimeout('RED');
+          return;
+        }
+      } else {
+        this.xiangqiState.blackTimeRemaining -= 1;
+        if (this.xiangqiState.blackTimeRemaining <= 0) {
+          this.xiangqiState.blackTimeRemaining = 0;
+          this.handleXiangqiTimeout('BLACK');
+          return;
+        }
+      }
+
+      this.onStateChange();
+    }, 1000);
+  }
+
+  private handleXiangqiTimeout(loserSide: 'RED' | 'BLACK') {
+    if (!this.xiangqiState) return;
+    this.stopTimer();
+
+    const winnerSide = loserSide === 'RED' ? 'BLACK' : 'RED';
+    this.xiangqiState.winnerSide = winnerSide;
+    this.xiangqiState.winReason = 'TIMEOUT';
+    this.status = 'FINISHED';
+
+    const winnerId = winnerSide === 'RED' ? this.xiangqiState.redPlayerId : this.xiangqiState.blackPlayerId;
+    const loserId = loserSide === 'RED' ? this.xiangqiState.redPlayerId : this.xiangqiState.blackPlayerId;
+
+    const winner = this.players.find((p) => p.id === winnerId);
+    const loser = this.players.find((p) => p.id === loserId);
+
+    const stakes = 100;
+    if (winner && loser) {
+      const penalty = Math.min(loser.score, stakes);
+      loser.score -= penalty;
+      winner.score += penalty;
+
+      this.results = [
+        {
+          playerId: winner.id,
+          playerName: winner.name,
+          avatar: winner.avatar,
+          rank: 1,
+          cardsLeft: 0,
+          cardsLeftList: [],
+          scoreChange: penalty,
+        },
+        {
+          playerId: loser.id,
+          playerName: loser.name,
+          avatar: loser.avatar,
+          rank: 2,
+          cardsLeft: 0,
+          cardsLeftList: [],
+          scoreChange: -penalty,
+        },
+      ];
+    }
+
+    const loserSideName = loserSide === 'RED' ? 'Đỏ' : 'Đen';
+    const winnerSideName = winnerSide === 'RED' ? 'Đỏ' : 'Đen';
+    this.addSystemChat(
+      `⏱️ HẾT GIỜ! Kỳ thủ ${loserSideName} (${loser?.name}) rụng kim hết thời gian. Kỳ thủ ${winnerSideName} (${winner?.name}) THẮNG cờ chớp!`
+    );
+
+    this.onStateChange();
+  }
+
+  public playXiangqiMove(
+    playerId: string,
+    from: { x: number; y: number },
+    to: { x: number; y: number }
+  ): { success: boolean; message?: string } {
+    if (this.status !== 'PLAYING' || !this.xiangqiState || this.xiangqiState.winnerSide) {
+      return { success: false, message: 'Trận đấu chưa bắt đầu hoặc đã kết thúc' };
+    }
+
+    const currentSide = this.xiangqiState.currentSide;
+    const expectedPlayerId =
+      currentSide === 'RED' ? this.xiangqiState.redPlayerId : this.xiangqiState.blackPlayerId;
+
+    if (playerId !== expectedPlayerId) {
+      return { success: false, message: 'Chưa tới lượt đi của bạn' };
+    }
+
+    const piece = getPieceAt(this.xiangqiState.pieces, from.x, from.y);
+    if (!piece || piece.color !== currentSide) {
+      return { success: false, message: 'Quân cờ không hợp lệ' };
+    }
+
+    const legalMoves = getLegalMoves(piece, this.xiangqiState.pieces);
+    const isLegal = legalMoves.some((m) => m.x === to.x && m.y === to.y);
+    if (!isLegal) {
+      return { success: false, message: 'Nước đi không hợp lệ theo luật cờ tướng' };
+    }
+
+    // Thực hiện nước đi
+    const capturedPiece = getPieceAt(this.xiangqiState.pieces, to.x, to.y);
+    const newPieces = this.xiangqiState.pieces
+      .filter((p) => !(p.x === to.x && p.y === to.y))
+      .map((p) => (p.id === piece.id ? { ...p, x: to.x, y: to.y } : p));
+
+    const notation = generateMoveNotation(piece, to, capturedPiece);
+    const opponentSide = currentSide === 'RED' ? 'BLACK' : 'RED';
+    const opponentInCheck = isSideInCheck(opponentSide, newPieces);
+
+    const moveRecord: XiangqiMove = {
+      from,
+      to,
+      piece: { ...piece, x: to.x, y: to.y },
+      capturedPiece,
+      notation,
+      isCheck: opponentInCheck,
+      timestamp: Date.now(),
+    };
+
+    this.xiangqiState.pieces = newPieces;
+    this.xiangqiState.lastMove = moveRecord;
+    this.xiangqiState.moveHistory.push(moveRecord);
+    this.xiangqiState.isCheck = opponentInCheck;
+    this.xiangqiState.checkSide = opponentInCheck ? opponentSide : null;
+    this.xiangqiState.drawOfferFrom = null; // Huỷ đề nghị hòa cũ
+
+    if (opponentInCheck) {
+      this.addSystemChat(`⚡ CHIẾU TƯỚNG! (${notation})`);
+    }
+
+    // Kiểm tra Chiếu Bí hoặc Hết Nước Đi (Stalemate)
+    const opponentHasMoves = hasAnyLegalMoves(opponentSide, newPieces);
+    if (!opponentHasMoves) {
+      this.stopTimer();
+      this.xiangqiState.winnerSide = currentSide;
+      this.xiangqiState.winReason = opponentInCheck ? 'CHECKMATE' : 'STALEMATE';
+      this.status = 'FINISHED';
+
+      const winnerId = expectedPlayerId;
+      const loserId = opponentSide === 'RED' ? this.xiangqiState.redPlayerId : this.xiangqiState.blackPlayerId;
+      const winner = this.players.find((p) => p.id === winnerId);
+      const loser = this.players.find((p) => p.id === loserId);
+
+      const stakes = 100;
+      if (winner && loser) {
+        const penalty = Math.min(loser.score, stakes);
+        loser.score -= penalty;
+        winner.score += penalty;
+
+        this.results = [
+          {
+            playerId: winner.id,
+            playerName: winner.name,
+            avatar: winner.avatar,
+            rank: 1,
+            cardsLeft: 0,
+            cardsLeftList: [],
+            scoreChange: penalty,
+          },
+          {
+            playerId: loser.id,
+            playerName: loser.name,
+            avatar: loser.avatar,
+            rank: 2,
+            cardsLeft: 0,
+            cardsLeftList: [],
+            scoreChange: -penalty,
+          },
+        ];
+      }
+
+      const reasonVN = opponentInCheck ? 'CHIẾU BÍ (Checkmate)' : 'HẾT NƯỚC ĐI (Stalemate)';
+      this.addSystemChat(
+        `🏆 TRẬN ĐẤU KẾT THÚC! ${winner?.name} (${currentSide === 'RED' ? 'Đỏ' : 'Đen'}) THẮNG do ${reasonVN}!`
+      );
+    } else {
+      // Cộng thời gian tích lũy theo Luật Quốc tế (Fischer increment: +30s standard, +3s blitz)
+      if (this.xiangqiState.incrementSeconds > 0) {
+        if (currentSide === 'RED') {
+          this.xiangqiState.redTimeRemaining += this.xiangqiState.incrementSeconds;
+        } else {
+          this.xiangqiState.blackTimeRemaining += this.xiangqiState.incrementSeconds;
+        }
+      }
+
+      // Chuyển lượt
+      this.xiangqiState.currentSide = opponentSide;
+      this.currentTurnPlayerId =
+        opponentSide === 'RED' ? this.xiangqiState.redPlayerId : this.xiangqiState.blackPlayerId;
+    }
+
+    this.onStateChange();
+    return { success: true };
+  }
+
+  public resignXiangqi(playerId: string): { success: boolean; message?: string } {
+    if (this.status !== 'PLAYING' || !this.xiangqiState || this.xiangqiState.winnerSide) {
+      return { success: false, message: 'Trận đấu chưa bắt đầu hoặc đã kết thúc' };
+    }
+
+    const isRed = playerId === this.xiangqiState.redPlayerId;
+    const isBlack = playerId === this.xiangqiState.blackPlayerId;
+
+    if (!isRed && !isBlack) {
+      return { success: false, message: 'Khán giả không thể đầu hàng' };
+    }
+
+    this.stopTimer();
+    const loserSide: XiangqiSide = isRed ? 'RED' : 'BLACK';
+    const winnerSide: XiangqiSide = isRed ? 'BLACK' : 'RED';
+
+    this.xiangqiState.winnerSide = winnerSide;
+    this.xiangqiState.winReason = 'RESIGN';
+    this.status = 'FINISHED';
+
+    const winnerId = winnerSide === 'RED' ? this.xiangqiState.redPlayerId : this.xiangqiState.blackPlayerId;
+    const loser = this.players.find((p) => p.id === playerId);
+    const winner = this.players.find((p) => p.id === winnerId);
+
+    const stakes = 100;
+    if (winner && loser) {
+      const penalty = Math.min(loser.score, stakes);
+      loser.score -= penalty;
+      winner.score += penalty;
+
+      this.results = [
+        {
+          playerId: winner.id,
+          playerName: winner.name,
+          avatar: winner.avatar,
+          rank: 1,
+          cardsLeft: 0,
+          cardsLeftList: [],
+          scoreChange: penalty,
+        },
+        {
+          playerId: loser.id,
+          playerName: loser.name,
+          avatar: loser.avatar,
+          rank: 2,
+          cardsLeft: 0,
+          cardsLeftList: [],
+          scoreChange: -penalty,
+        },
+      ];
+    }
+
+    this.addSystemChat(
+      `🏳️ ${loser?.name} (${loserSide === 'RED' ? 'Đỏ' : 'Đen'}) đã xin đầu hàng. ${winner?.name} giành chiến thắng!`
+    );
+    this.onStateChange();
+    return { success: true };
+  }
+
+  public offerXiangqiDraw(playerId: string): { success: boolean; message?: string } {
+    if (this.status !== 'PLAYING' || !this.xiangqiState || this.xiangqiState.winnerSide) {
+      return { success: false, message: 'Trận đấu chưa bắt đầu hoặc đã kết thúc' };
+    }
+
+    const isRed = playerId === this.xiangqiState.redPlayerId;
+    const isBlack = playerId === this.xiangqiState.blackPlayerId;
+
+    if (!isRed && !isBlack) {
+      return { success: false, message: 'Khán giả không thể xin hòa' };
+    }
+
+    const side: XiangqiSide = isRed ? 'RED' : 'BLACK';
+    this.xiangqiState.drawOfferFrom = side;
+
+    const player = this.players.find((p) => p.id === playerId);
+    this.addSystemChat(`🤝 ${player?.name} (${side === 'RED' ? 'Đỏ' : 'Đen'}) đề nghị hòa cờ.`);
+    this.onStateChange();
+    return { success: true };
+  }
+
+  public respondXiangqiDraw(playerId: string, accept: boolean): { success: boolean; message?: string } {
+    if (this.status !== 'PLAYING' || !this.xiangqiState || !this.xiangqiState.drawOfferFrom) {
+      return { success: false, message: 'Không có lời cầu hòa nào cần phản hồi' };
+    }
+
+    const isRed = playerId === this.xiangqiState.redPlayerId;
+    const isBlack = playerId === this.xiangqiState.blackPlayerId;
+    const mySide: XiangqiSide = isRed ? 'RED' : 'BLACK';
+
+    if (mySide === this.xiangqiState.drawOfferFrom) {
+      return { success: false, message: 'Bạn không thể tự chấp nhận lời cầu hòa của chính mình' };
+    }
+
+    const responder = this.players.find((p) => p.id === playerId);
+
+    if (accept) {
+      this.stopTimer();
+      this.xiangqiState.winnerSide = 'DRAW';
+      this.xiangqiState.winReason = 'AGREED_DRAW';
+      this.status = 'FINISHED';
+
+      const redP = this.players.find((p) => p.id === this.xiangqiState?.redPlayerId);
+      const blackP = this.players.find((p) => p.id === this.xiangqiState?.blackPlayerId);
+
+      this.results = [
+        {
+          playerId: redP ? redP.id : '',
+          playerName: redP ? redP.name : 'Đỏ',
+          avatar: redP ? redP.avatar : '🔴',
+          rank: 1,
+          cardsLeft: 0,
+          cardsLeftList: [],
+          scoreChange: 0,
+        },
+        {
+          playerId: blackP ? blackP.id : '',
+          playerName: blackP ? blackP.name : 'Đen',
+          avatar: blackP ? blackP.avatar : '⚫',
+          rank: 1,
+          cardsLeft: 0,
+          cardsLeftList: [],
+          scoreChange: 0,
+        },
+      ];
+
+      this.addSystemChat(`🤝 Hai kỳ thủ đã đồng ý HÒA CỜ! Trận đấu kết thúc với kết quả hòa.`);
+    } else {
+      this.xiangqiState.drawOfferFrom = null;
+      this.addSystemChat(`${responder?.name} đã từ chối lời đề nghị hòa cờ. Trận đấu tiếp tục.`);
+    }
+
+    this.onStateChange();
+    return { success: true };
+  }
+
+  // Đưa phòng chơi về trạng thái phòng chờ (WAITING)
+  public resetToWaitingRoom(requestedByPlayerId: string): { success: boolean; message?: string } {
+    const requester = this.players.find((p) => p.id === requestedByPlayerId);
+    if (!requester || !requester.isHost) {
+      return { success: false, message: 'Chỉ chủ phòng mới có quyền đưa phòng về trạng thái chờ' };
+    }
+
+    this.stopTimer();
+    this.status = 'WAITING';
+    this.results = undefined;
+    this.currentTurnPlayerId = null;
+    this.lastPlayedHand = null;
+    this.roundHistory = [];
+    this.roundWinners = [];
+    this.isFirstTurnOfGame = true;
+
+    this.players.forEach((p) => {
+      p.status = 'WAITING';
+      p.hasPassedCurrentRound = false;
+      p.cards = [];
+    });
+
+    if (this.xiangqiState) {
+      this.xiangqiState.winnerSide = null;
+      this.xiangqiState.winReason = undefined;
+      this.xiangqiState.drawOfferFrom = null;
+      this.xiangqiState.isCheck = false;
+      this.xiangqiState.checkSide = null;
+      this.xiangqiState.lastMove = null;
+      this.xiangqiState.moveHistory = [];
+      this.xiangqiState.redTimeRemaining = this.xiangqiState.initialBlitzTime;
+      this.xiangqiState.blackTimeRemaining = this.xiangqiState.initialBlitzTime;
+    }
+
+    this.addSystemChat('Chủ phòng đã đưa phòng về trạng thái phòng chờ.');
+    this.onStateChange();
+    return { success: true };
   }
 
   // --- DỮ LIỆU ĐỒNG BỘ CLIENT ---
@@ -670,21 +1438,26 @@ export class GameRoom {
       isCurrentTurn: this.currentTurnPlayerId === p.id,
       isConnected: p.socketId !== null,
       score: p.score,
+      isSpectator: p.isSpectator,
+      xiangqiSide: p.xiangqiSide,
     }));
 
     return {
       code: this.code,
       rule: this.rule,
+      xiangqiTimeMode: this.xiangqiTimeMode,
       status: this.status,
       players: playersInfo,
       currentTurnPlayerId: this.currentTurnPlayerId,
-      turnTimeRemaining: this.turnTimeRemaining,
+      turnTimeRemaining: Math.max(0, this.turnTimeRemaining),
       turnDuration: this.turnDuration,
       lastPlayedHand: this.lastPlayedHand,
       lastRoundWinnerId: this.lastRoundWinnerId,
       gameNumber: this.gameNumber,
       isFirstTurnOfGame: this.isFirstTurnOfGame,
+      mustPlayThreeOfSpades: this.mustPlayThreeOfSpades,
       samLocState: this.samLocState,
+      xiangqiState: this.xiangqiState,
       results: this.results,
     };
   }
@@ -696,5 +1469,7 @@ export class GameRoom {
 
   public cleanup() {
     this.stopTimer();
+    this.disconnectTimers.forEach((timer) => clearTimeout(timer));
+    this.disconnectTimers.clear();
   }
 }

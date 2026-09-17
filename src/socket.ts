@@ -6,15 +6,18 @@ export function getOrCreatePlayerProfile(): {
   name: string;
   avatar: string;
   reconnectToken: string;
+  score: number;
 } {
-  let id = localStorage.getItem('cardgame_player_id');
+  // Use sessionStorage for tab-specific ID so testing 2+ tabs on same machine works without collision!
+  let id = sessionStorage.getItem('cardgame_player_id');
   if (!id) {
     id = 'p_' + Math.random().toString(36).substring(2, 11);
-    localStorage.setItem('cardgame_player_id', id);
+    sessionStorage.setItem('cardgame_player_id', id);
   }
 
-  let name = localStorage.getItem('cardgame_player_name') || '';
-  let avatar = localStorage.getItem('cardgame_player_avatar') || '🤠';
+  // Name and avatar can be loaded from sessionStorage or localStorage
+  let name = sessionStorage.getItem('cardgame_player_name') || localStorage.getItem('cardgame_player_name') || '';
+  let avatar = sessionStorage.getItem('cardgame_player_avatar') || localStorage.getItem('cardgame_player_avatar') || '🤠';
 
   let reconnectToken = sessionStorage.getItem('cardgame_reconnect_token');
   if (!reconnectToken) {
@@ -22,12 +25,25 @@ export function getOrCreatePlayerProfile(): {
     sessionStorage.setItem('cardgame_reconnect_token', reconnectToken);
   }
 
-  return { id, name, avatar, reconnectToken };
+  const rawScore = sessionStorage.getItem('cardgame_player_score') || localStorage.getItem('cardgame_player_score');
+  const score = rawScore ? parseInt(rawScore, 10) : 1000;
+
+  return { id, name, avatar, reconnectToken, score };
 }
 
-export function savePlayerProfile(name: string, avatar: string) {
+export function savePlayerProfile(name: string, avatar: string, score?: number) {
+  sessionStorage.setItem('cardgame_player_name', name);
+  sessionStorage.setItem('cardgame_player_avatar', avatar);
   localStorage.setItem('cardgame_player_name', name);
   localStorage.setItem('cardgame_player_avatar', avatar);
+  if (typeof score === 'number') {
+    savePlayerScore(score);
+  }
+}
+
+export function savePlayerScore(score: number) {
+  sessionStorage.setItem('cardgame_player_score', score.toString());
+  localStorage.setItem('cardgame_player_score', score.toString());
 }
 
 export function saveLastRoomCode(code: string) {

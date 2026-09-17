@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { RoomManager } from './roomManager';
-import { GameRule } from './types';
+import { GameRule, XiangqiTimeMode } from './types';
 
 export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
   // Broadcast helper
@@ -35,15 +35,22 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         playerAvatar: string;
         rule: GameRule;
         reconnectToken: string;
+        initialScore?: number;
+        xiangqiTimeMode?: XiangqiTimeMode;
       }, callback) => {
         try {
-          const room = roomManager.createRoom(data.rule, (code) => broadcastRoomUpdate(code));
+          const room = roomManager.createRoom(
+            data.rule,
+            (code) => broadcastRoomUpdate(code),
+            data.xiangqiTimeMode
+          );
           const addRes = room.addPlayer(
             data.playerId,
             socket.id,
             data.playerName,
             data.playerAvatar,
-            data.reconnectToken
+            data.reconnectToken,
+            data.initialScore
           );
 
           if (!addRes.success) {
@@ -62,6 +69,26 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       }
     );
 
+    // 1.5. Đổi chế độ thời gian Cờ Tướng (Chỉ chủ phòng)
+    socket.on(
+      'ROOM_SET_XIANGQI_TIME_MODE',
+      (
+        data: { roomCode: string; playerId: string; timeMode: XiangqiTimeMode },
+        callback
+      ) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const res = room.setXiangqiTimeMode(data.playerId, data.timeMode);
+        if (res.success) {
+          broadcastRoomUpdate(data.roomCode);
+        }
+        callback?.(res);
+      }
+    );
+
     // 2. Tham gia phòng đã có (hoặc Reconnect)
     socket.on(
       'ROOM_JOIN',
@@ -71,6 +98,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         playerName: string;
         playerAvatar: string;
         reconnectToken: string;
+        initialScore?: number;
       }, callback) => {
         try {
           const code = (data.roomCode || '').toUpperCase().trim();
@@ -86,7 +114,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
             socket.id,
             data.playerName,
             data.playerAvatar,
-            data.reconnectToken
+            data.reconnectToken,
+            data.initialScore
           );
 
           if (!addRes.success) {
@@ -109,11 +138,12 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
     socket.on(
       'ROOM_LEAVE',
       (data: { roomCode: string; playerId: string }, callback) => {
+        // Socket rời phòng roomCode TRƯỚC để không nhận broadcast ROOM_STATE kéo ngược lại phòng
+        socket.leave(data.roomCode);
         const room = roomManager.getRoom(data.roomCode);
         if (room) {
-          const isEmpty = room.removePlayer(data.playerId);
-          socket.leave(data.roomCode);
           roomManager.unregisterPlayer(data.playerId);
+          const isEmpty = room.removePlayer(data.playerId);
 
           if (isEmpty) {
             roomManager.deleteRoom(data.roomCode);
@@ -156,12 +186,63 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           return;
         }
 
+        // Đảm bảo socket của người bấm bắt đầu luôn cập nhật mới nhất
+        const requester = room.players.find((p) => p.id === data.requestedByPlayerId);
+        if (requester) {
+          requester.socketId = socket.id;
+          requester.disconnectedAt = null;
+          socket.join(data.roomCode);
+        }
+
         const startRes = room.startGame(data.requestedByPlayerId);
         if (startRes.success) {
           broadcastRoomUpdate(data.roomCode);
           callback?.({ success: true });
         } else {
           callback?.({ success: false, message: startRes.message });
+        }
+      }
+    );
+
+    // 5.1. Đưa phòng về trạng thái phòng chờ (WAITING)
+    socket.on(
+      'ROOM_RESET_TO_WAITING',
+      (data: { roomCode: string; requestedByPlayerId: string }, callback) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+
+        const resetRes = room.resetToWaitingRoom(data.requestedByPlayerId);
+        if (resetRes.success) {
+          broadcastRoomUpdate(data.roomCode);
+          callback?.({ success: true });
+        } else {
+          callback?.({ success: false, message: resetRes.message });
+        }
+      }
+    );
+
+    // 5.2. Lấy bài của tôi (fallback/đồng bộ bài chủ động)
+    socket.on(
+      'GAME_GET_MY_CARDS',
+      (data: { roomCode: string; playerId: string }, callback) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, cards: [] });
+          return;
+        }
+
+        const player = room.players.find((p) => p.id === data.playerId);
+        if (player) {
+          player.socketId = socket.id;
+          player.disconnectedAt = null;
+          socket.join(data.roomCode);
+          callback?.({ success: true, cards: player.cards });
+          socket.emit('PLAYER_CARDS', player.cards);
+        } else {
+          callback?.({ success: false, cards: [] });
         }
       }
     );
@@ -174,6 +255,12 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         if (!room) {
           callback?.({ success: false, message: 'Phòng không tồn tại' });
           return;
+        }
+
+        const player = room.players.find((p) => p.id === data.playerId);
+        if (player) {
+          player.socketId = socket.id;
+          player.disconnectedAt = null;
         }
 
         const playRes = room.playHand(data.playerId, data.cardIds);
@@ -196,6 +283,12 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           return;
         }
 
+        const player = room.players.find((p) => p.id === data.playerId);
+        if (player) {
+          player.socketId = socket.id;
+          player.disconnectedAt = null;
+        }
+
         const passRes = room.passTurn(data.playerId);
         if (passRes.success) {
           broadcastRoomUpdate(data.roomCode);
@@ -212,9 +305,101 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       (data: { roomCode: string; playerId: string; wantsBaoSam: boolean }) => {
         const room = roomManager.getRoom(data.roomCode);
         if (room) {
+          const player = room.players.find((p) => p.id === data.playerId);
+          if (player) {
+            player.socketId = socket.id;
+            player.disconnectedAt = null;
+          }
           room.reportBaoSam(data.playerId, data.wantsBaoSam);
           broadcastRoomUpdate(data.roomCode);
         }
+      }
+    );
+
+    // 8.1. Đổi vị trí ghế trong phòng (cho Cờ Tướng hoặc Sảnh)
+    socket.on(
+      'ROOM_SWITCH_SEAT',
+      (data: { roomCode: string; playerId: string; targetSeatIndex: number }, callback) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const res = room.switchSeat(data.playerId, data.targetSeatIndex);
+        if (res.success) {
+          broadcastRoomUpdate(data.roomCode);
+        }
+        callback?.(res);
+      }
+    );
+
+    // 8.2. Đi nước cờ tướng (Cờ Chớp)
+    socket.on(
+      'GAME_XIANGQI_MOVE',
+      (
+        data: {
+          roomCode: string;
+          playerId: string;
+          from: { x: number; y: number };
+          to: { x: number; y: number };
+        },
+        callback
+      ) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const res = room.playXiangqiMove(data.playerId, data.from, data.to);
+        if (res.success) {
+          broadcastRoomUpdate(data.roomCode);
+        }
+        callback?.(res);
+      }
+    );
+
+    // 8.3. Đầu hàng cờ tướng
+    socket.on('GAME_XIANGQI_RESIGN', (data: { roomCode: string; playerId: string }, callback) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (!room) {
+        callback?.({ success: false, message: 'Phòng không tồn tại' });
+        return;
+      }
+      const res = room.resignXiangqi(data.playerId);
+      if (res.success) {
+        broadcastRoomUpdate(data.roomCode);
+      }
+      callback?.(res);
+    });
+
+    // 8.4. Đề nghị hòa cờ tướng
+    socket.on('GAME_XIANGQI_OFFER_DRAW', (data: { roomCode: string; playerId: string }, callback) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (!room) {
+        callback?.({ success: false, message: 'Phòng không tồn tại' });
+        return;
+      }
+      const res = room.offerXiangqiDraw(data.playerId);
+      if (res.success) {
+        broadcastRoomUpdate(data.roomCode);
+      }
+      callback?.(res);
+    });
+
+    // 8.5. Phản hồi lời mời hòa cờ tướng
+    socket.on(
+      'GAME_XIANGQI_RESPOND_DRAW',
+      (data: { roomCode: string; playerId: string; accept: boolean }, callback) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const res = room.respondXiangqiDraw(data.playerId, data.accept);
+        if (res.success) {
+          broadcastRoomUpdate(data.roomCode);
+        }
+        callback?.(res);
       }
     );
 

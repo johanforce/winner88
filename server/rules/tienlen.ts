@@ -1,5 +1,5 @@
 import { Card, AnalyzedHand, PlayedHand } from '../types';
-import { sortCards, compareCards, getRankLabel, isThreeOfSpades } from '../cardUtils';
+import { sortCards, compareCards, getRankLabel, isThreeOfSpades, SUIT_NAMES } from '../cardUtils';
 
 /**
  * Phân tích và kiểm tra tính hợp lệ của bộ bài theo luật Tiến Lên Miền Nam
@@ -12,10 +12,10 @@ export function analyzeTienLenHand(cards: Card[]): AnalyzedHand {
   const sorted = sortCards(cards);
   const len = sorted.length;
 
-  // 1. Lá đơn (Rác)
+  // 1. Lá đơn (ví dụ: "7 Rô", "3 Bích", "10 Tép", "A Cơ", "2 Cơ")
   if (len === 1) {
     const card = sorted[0];
-    const desc = card.rank === 15 ? `Heo (${getRankLabel(card.rank)})` : `Rác ${getRankLabel(card.rank)}`;
+    const desc = `${getRankLabel(card.rank)} ${SUIT_NAMES[card.suit]}`;
     return {
       isValid: true,
       type: 'SINGLE',
