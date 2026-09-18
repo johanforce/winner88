@@ -18,14 +18,16 @@ interface RuleGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultRule?: GameRule;
+  initialRule?: GameRule;
 }
 
 export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
   isOpen,
   onClose,
-  defaultRule = 'TIEN_LEN_MIEN_NAM',
+  defaultRule,
+  initialRule,
 }) => {
-  const [activeTab, setActiveTab] = useState<ModalTab>(defaultRule);
+  const [activeTab, setActiveTab] = useState<ModalTab>(initialRule || defaultRule || 'TIEN_LEN_MIEN_NAM');
 
   if (!isOpen) return null;
 
@@ -88,6 +90,16 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
             }`}
           >
             <span>❌⭕ Cờ Caro</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('PHOM')}
+            className={`pb-2.5 px-2.5 sm:px-3 font-semibold text-xs sm:text-sm transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer touch-manipulation ${
+              activeTab === 'PHOM'
+                ? 'border-purple-500 text-purple-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>🎴 Phỏm (Tá Lả)</span>
           </button>
           <button
             onClick={() => setActiveTab('PENALTY_RATES')}
@@ -365,6 +377,110 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                   <li><strong>Đầu hàng (Xin thua):</strong> Chủ động nhận thua nếu thấy đối thủ đang nắm thế cờ áp đảo.</li>
                   <li><strong>Hiển thị số nước đi:</strong> Bấm nút <strong>123</strong> trên góc phải để xem số thứ tự từng nước cờ.</li>
                   <li><strong>Khán giả theo dõi:</strong> Bạn bè có thể vào phòng xem trực tiếp và đàm thoại Voice Chat thời gian thực.</li>
+                </ul>
+              </div>
+            </>
+          ) : activeTab === 'PHOM' ? (
+            <>
+              {/* 1. Chuẩn bị */}
+              <div className="bg-purple-950/40 border border-purple-800/40 p-3.5 rounded-xl">
+                <h3 className="font-bold text-purple-300 text-xs flex items-center gap-1.5 mb-2">
+                  <BookOpen className="w-4 h-4 text-purple-400" /> 1. Chuẩn Bị & Điều Kiện Bắt Đầu
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1 list-disc pl-5">
+                  <li>Bộ bài Tây 52 lá chuẩn, không dùng Joker.</li>
+                  <li>Số người chơi bắt buộc: <strong>Đúng 4 người</strong>.</li>
+                  <li>Mỗi người chơi được chia <strong>9 lá bài</strong>.</li>
+                  <li>Số bài còn lại úp làm <strong>Nọc</strong>, lật ngửa 1 lá đầu tiên đặt riêng làm lá đánh mở màn.</li>
+                  <li>Mỗi người cần có tối thiểu <strong>200 xu</strong> để vào phòng chơi.</li>
+                </ul>
+              </div>
+
+              {/* 2. Khái niệm Phỏm */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> 2. Khái Niệm "Phỏm" (Bộ 3 lá hợp lệ)
+                </h3>
+                <p className="text-xs text-slate-300">
+                  Phỏm là bộ 3 lá bài hợp lệ, gồm 2 loại duy nhất:
+                </p>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li><strong>Phỏm ngang (bộ 3 số / sáp):</strong> 3 lá cùng giá trị (rank), khác chất nhau. Ví dụ: 7♠ 7♦ 7♣.</li>
+                  <li><strong>Phỏm dọc (sảnh):</strong> 3 lá liên tiếp về giá trị, cùng một chất. Ví dụ: 5♥ 6♥ 7♥.</li>
+                  <li><strong>Quy tắc quân Át (A):</strong> Quân A chỉ được đứng đầu sảnh (A-2-3) hoặc cuối sảnh (Q-K-A). <strong>Không nối vòng (K-A-2 là KHÔNG hợp lệ)</strong>.</li>
+                </ul>
+              </div>
+
+              {/* 3. Trình tự lượt chơi */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-amber-400" /> 3. Trình Tự Một Lượt Chơi (2 Bước Bắt Buộc)
+                </h3>
+                <div className="space-y-2 text-xs text-slate-300">
+                  <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <strong className="text-amber-300">Bước 1 – Lấy bài (chỉ chọn 1 trong 2):</strong>
+                    <ul className="list-disc pl-5 mt-1 space-y-0.5">
+                      <li>Bốc 1 lá úp từ Nọc, hoặc:</li>
+                      <li>Ăn lá bài rác của người đi trước nếu lá đó kết hợp với 2 lá trên tay tạo thành 1 Phỏm hợp lệ. Khi ăn bài, Phỏm mới tạo thành phải được hạ ngửa ngay xuống bàn cho mọi người thấy.</li>
+                    </ul>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <strong className="text-rose-300">Bước 2 – Đánh bài:</strong>
+                    <ul className="list-disc pl-5 mt-1 space-y-0.5">
+                      <li>Đánh 1 lá bài rác trên tay xuống bàn.</li>
+                      <li><strong>Lưu ý:</strong> Không được đánh ra chính lá bài mình vừa ăn trong lượt đó!</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Luật Chặt bài */}
+              <div className="bg-rose-950/30 border border-rose-800/40 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-rose-300 text-xs flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-rose-400" /> 4. Luật Chặn / "Chặt" Bài (Đặc Biệt)
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li>Khi bất kỳ người chơi nào đánh ra 1 lá bài, hệ thống mở <strong>cửa sổ 5 giây</strong> cho tất cả người chơi khác.</li>
+                  <li>Bất kỳ ai (không chỉ người ngồi kế tiếp) có 2 lá bài trên tay kết hợp được với lá vừa đánh tạo thành Phỏm hợp lệ đều có quyền bấm <strong>CHẶT BÀI</strong>.</li>
+                  <li>Nếu có người chặt thành công:
+                    <ul className="list-circle pl-5 mt-1 space-y-0.5">
+                      <li>Người chặt hạ ngay Phỏm đó xuống bàn.</li>
+                      <li>Người vừa đánh lá bài bị phạt và phải trả tiền cho người chặt.</li>
+                      <li>Lượt chơi lập tức chuyển về cho người vừa chặt, người này tiếp tục thực hiện Bước 2 (Đánh 1 lá rác).</li>
+                    </ul>
+                  </li>
+                  <li>Nếu hết 5 giây không ai chặt, lượt chơi tiếp tục theo chiều kim đồng hồ như bình thường.</li>
+                </ul>
+              </div>
+
+              {/* 5. Thắng thua & Tính điểm */}
+              <div className="bg-amber-950/30 border border-amber-800/40 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-amber-400" /> 5. Điều Kiện Thắng / Thua & Tính Điểm
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li><strong>Ù (Thắng tuyệt đối):</strong> Sau khi hạ phỏm/chặt, toàn bộ bài trên tay đều nằm trong các phỏm hợp lệ, không còn lá rác nào (hoặc chỉ còn đúng 1 lá rác đánh ra để thắng). Ván dừng ngay lập tức.</li>
+                  <li><strong>Ù Trắng:</strong> Ngay sau khi chia 9 lá ban đầu, bài tự tạo thành các phỏm trọn vẹn. Thắng ngay lập tức và được <strong>nhân đôi tiền thưởng (x2)</strong> từ mỗi người chơi.</li>
+                  <li><strong>Hết nọc:</strong> Nọc được bốc hết mà không ai Ù, mỗi người hạ các phỏm hợp lệ trên tay (nếu có) và tính điểm các lá bài rác còn lại:
+                    <div className="mt-1 text-[11px] font-mono text-amber-300">
+                      Át (A) = 1 điểm • 2..10 = số tương ứng • J = 11 • Q = 12 • K = 13 điểm
+                    </div>
+                    Người có <strong>tổng điểm bài rác thấp nhất</strong> sẽ giành chiến thắng!
+                  </li>
+                </ul>
+              </div>
+
+              {/* 6. Mức cược & Phạt xu */}
+              <div className="bg-slate-950/70 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <Coins className="w-4 h-4 text-amber-400" /> 6. Mức Phạt & Thưởng Xu Game Phỏm
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1 list-disc pl-5">
+                  <li><strong>Ăn cây / Chặt bài:</strong> 20 xu mỗi lần (người đánh trả trực tiếp cho người ăn/chặt).</li>
+                  <li><strong>Điểm bài rác khi hết nọc:</strong> Mỗi điểm bài rác = 10 xu. Người thua trả cho người thắng số xu = chênh lệch điểm rác &times; 10 xu.</li>
+                  <li><strong>Ù thường:</strong> Người thắng Ù nhận từ mỗi người thua tổng điểm rác của người đó &times; 10 xu (cộng tiền ăn cây).</li>
+                  <li><strong>Ù trắng:</strong> Nhận gấp đôi (x2) tiền thắng từ mỗi người trong bàn.</li>
                 </ul>
               </div>
             </>

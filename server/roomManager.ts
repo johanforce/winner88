@@ -110,7 +110,9 @@ export class RoomManager {
         ? 'SL'
         : rule === 'CO_TUONG'
         ? 'CT'
-        : 'CR';
+        : rule === 'CARO'
+        ? 'CR'
+        : 'PH';
     let code = '';
     let attempts = 0;
     do {

@@ -1,6 +1,51 @@
 export type Suit = 'SPADE' | 'CLUB' | 'DIAMOND' | 'HEART';
 
-export type GameRule = 'TIEN_LEN_MIEN_NAM' | 'SAM_LOC' | 'CO_TUONG' | 'CARO';
+export type GameRule = 'TIEN_LEN_MIEN_NAM' | 'SAM_LOC' | 'CO_TUONG' | 'CARO' | 'PHOM';
+
+// --- PHỎM (TÁ LẢ) TYPES ---
+export interface PhomMeld {
+  id: string;
+  playerId: string;
+  playerName: string;
+  type: 'SAME_RANK' | 'STRAIGHT';
+  cards: Card[];
+  eatenCardId?: string;
+}
+
+export interface PhomInterceptWindow {
+  card: Card;
+  discardedByPlayerId: string;
+  discardedByPlayerName: string;
+  expiresAt: number;
+  secondsRemaining: number;
+}
+
+export interface PhomPenaltyInfo {
+  playerId: string;
+  playerName: string;
+  unmeldedCards: Card[];
+  unmeldedPoints: number;
+  chattedCount: number;
+  chattedCards: Card[];
+  penaltyCoins: number;
+  actualPaidCoins: number;
+}
+
+export interface PhomState {
+  deckCount: number;
+  openingDiscardCard: Card | null;
+  discardPile: { card: Card; discardedByPlayerId: string; discardedByPlayerName: string }[];
+  melds: PhomMeld[];
+  turnStep: 'DRAW_OR_EAT' | 'DISCARD';
+  eatenCardThisTurnId?: string | null;
+  interceptWindow?: PhomInterceptWindow | null;
+  chattedCounts: Record<string, number>;
+  chattedCards: Record<string, Card[]>;
+  winnerPlayerId?: string | null;
+  isUTrang?: boolean;
+  winReason?: 'U' | 'U_TRANG' | 'NOC_EMPTY_DRAW';
+  penalties?: Record<string, PhomPenaltyInfo>;
+}
 
 // --- CỜ CARO TYPES ---
 export type CaroPiece = 'X' | 'O';
@@ -181,6 +226,7 @@ export interface RoomPublicState {
   samLocState?: SamLocState;
   xiangqiState?: XiangqiState;
   caroState?: CaroState;
+  phomState?: PhomState;
   results?: GameResultRecord[];
   voiceParticipants?: VoiceParticipant[];
 }

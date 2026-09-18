@@ -20,6 +20,7 @@ import { PhongChoi } from './components/PhongChoi';
 import { BanChoi } from './components/BanChoi';
 import { BanCoTuong } from './components/BanCoTuong';
 import { BanCaro } from './components/BanCaro';
+import { BanPhom } from './components/BanPhom';
 import { VoiceChatProvider } from './context/VoiceChatContext';
 import { VoiceChatWidget } from './components/VoiceChatWidget';
 import { WifiOff, AlertTriangle } from 'lucide-react';
@@ -352,6 +353,14 @@ export default function App() {
             <BanCaro
               roomState={roomState}
               myPlayerId={profile.id}
+              chatMessages={chatMessages}
+              onLeaveRoom={handleLeaveRoom}
+            />
+          ) : roomState.rule === 'PHOM' ? (
+            <BanPhom
+              roomState={roomState}
+              myPlayerId={profile.id}
+              playerCards={playerCards}
               chatMessages={chatMessages}
               onLeaveRoom={handleLeaveRoom}
             />

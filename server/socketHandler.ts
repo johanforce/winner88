@@ -490,6 +490,86 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       }
     );
 
+    // 8.10. Bốc bài từ nọc trong Phỏm
+    socket.on('PHOM_DRAW_CARD', (data: { roomCode: string; playerId: string }, callback) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (!room) {
+        callback?.({ success: false, message: 'Phòng không tồn tại' });
+        return;
+      }
+      const res = room.phomDrawCard(data.playerId);
+      if (res.success) {
+        broadcastRoomUpdate(data.roomCode);
+      }
+      callback?.(res);
+    });
+
+    // 8.11. Ăn bài trong Phỏm (ghép 2 lá trên tay với lá ngửa trên bàn)
+    socket.on(
+      'PHOM_EAT_CARD',
+      (data: { roomCode: string; playerId: string; handCardIds: string[] }, callback) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const res = room.phomEatCard(data.playerId, data.handCardIds);
+        if (res.success) {
+          broadcastRoomUpdate(data.roomCode);
+        }
+        callback?.(res);
+      }
+    );
+
+    // 8.12. Đánh bài rác trong Phỏm
+    socket.on(
+      'PHOM_DISCARD_CARD',
+      (data: { roomCode: string; playerId: string; cardId: string }, callback) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const res = room.phomDiscardCard(data.playerId, data.cardId);
+        if (res.success) {
+          broadcastRoomUpdate(data.roomCode);
+        }
+        callback?.(res);
+      }
+    );
+
+    // 8.13. Chặt bài trong Phỏm (5 giây chặn bài)
+    socket.on(
+      'PHOM_INTERCEPT',
+      (data: { roomCode: string; playerId: string; handCardIds: string[] }, callback) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const res = room.phomIntercept(data.playerId, data.handCardIds);
+        if (res.success) {
+          broadcastRoomUpdate(data.roomCode);
+        }
+        callback?.(res);
+      }
+    );
+
+    // 8.14. Nạp thêm xu hỗ trợ người chơi
+    socket.on(
+      'PLAYER_ADD_COINS',
+      (data: { roomCode: string; playerId: string; amount?: number }, callback) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (room) {
+          room.addCoinsToPlayer(data.playerId, data.amount || 500);
+          broadcastRoomUpdate(data.roomCode);
+          callback?.({ success: true });
+        } else {
+          callback?.({ success: false });
+        }
+      }
+    );
+
     // 9. Gửi tin nhắn chat
     socket.on('CHAT_MESSAGE', (data: { roomCode: string; playerId: string; text: string }) => {
       const room = roomManager.getRoom(data.roomCode);

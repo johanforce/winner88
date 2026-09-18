@@ -317,6 +317,15 @@ export const Lobby: React.FC<LobbyProps> = ({
                 >
                   Cờ Caro
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterRule('PHOM')}
+                  className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
+                    filterRule === 'PHOM' ? 'bg-purple-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Phỏm
+                </button>
               </div>
 
               <button
@@ -375,7 +384,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                               ? 'bg-amber-950 text-amber-300 border-amber-800'
                               : room.rule === 'CO_TUONG'
                               ? 'bg-red-950 text-red-300 border-red-800'
-                              : 'bg-cyan-950 text-cyan-300 border-cyan-800'
+                              : room.rule === 'CARO'
+                              ? 'bg-cyan-950 text-cyan-300 border-cyan-800'
+                              : 'bg-purple-950 text-purple-300 border-purple-800'
                           }`}
                         >
                           {room.rule === 'TIEN_LEN_MIEN_NAM'
@@ -384,6 +395,8 @@ export const Lobby: React.FC<LobbyProps> = ({
                             ? '🔥 Sâm Lốc'
                             : room.rule === 'CARO'
                             ? '⚡ Cờ Caro (5p)'
+                            : room.rule === 'PHOM'
+                            ? '🎴 Phỏm (Tá Lả)'
                             : room.xiangqiTimeMode === 'STANDARD'
                             ? '🏆 Cờ Tướng (Tiêu chuẩn)'
                             : '⚡ Cờ Tướng (Chớp 5p)'}
@@ -529,6 +542,27 @@ export const Lobby: React.FC<LobbyProps> = ({
                     <span className="font-black text-sm block text-white">Cờ Caro</span>
                     <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
                       Ăn 5 chặn 2 đầu vẫn THẮNG. Thời gian 5 phút/bên.
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRule('PHOM')}
+                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer sm:col-span-2 ${
+                      selectedRule === 'PHOM'
+                        ? 'bg-purple-950/60 border-purple-500 ring-2 ring-purple-500/30 text-white'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mb-2 block">🎴</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-sm block text-white">Đánh Phỏm (Tá Lả)</span>
+                      <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-bold">
+                        HOT MỚI
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
+                      4 người, 9 lá, ăn bài / bốc nọc, cửa sổ chặt bài 5s kịch tính, tính xu phạt ăn cây &amp; Ù. (Tối thiểu 200 xu để vào bàn).
                     </span>
                   </button>
                 </div>

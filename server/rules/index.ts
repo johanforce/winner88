@@ -19,3 +19,5 @@ export function canBeatByRule(
   }
   return canBeatTienLen(candidate, current);
 }
+
+export * from './phom';

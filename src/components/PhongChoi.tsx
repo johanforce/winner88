@@ -58,6 +58,7 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
   const isHost = me?.isHost || false;
   const isCoTuong = roomState.rule === 'CO_TUONG';
   const isCaro = roomState.rule === 'CARO';
+  const isPhom = roomState.rule === 'PHOM';
   const isBoardGame = isCoTuong || isCaro;
   const activePlayers = roomState.players.filter((p) => p.isConnected);
 
@@ -70,9 +71,11 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
     }
   });
 
-  // Start criteria: For board games, both Seat 0 and Seat 1 must be filled
+  // Start criteria: For board games, both Seat 0 and Seat 1 must be filled. For Phỏm, exactly 4 players.
   const canStart = isBoardGame
     ? isHost && !!seats[0]?.isConnected && !!seats[1]?.isConnected
+    : isPhom
+    ? isHost && activePlayers.length === 4
     : isHost && activePlayers.length >= 2;
 
   const handleCopyCode = () => {
@@ -247,6 +250,7 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
             {roomState.rule === 'SAM_LOC' && '🔥 Sâm Lốc (10 lá)'}
             {roomState.rule === 'CO_TUONG' && '🏆 Cờ Tướng Cờ Chớp (5 phút)'}
             {roomState.rule === 'CARO' && '⚡ Cờ Caro (5 phút/bên - Ăn 5 chặn 2 đầu win)'}
+            {roomState.rule === 'PHOM' && '🎴 Phỏm (Tá Lả - Chuẩn 4 người)'}
           </div>
         </div>
 
@@ -317,6 +321,8 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                   ? 'Phòng Chờ Cờ Caro (2 Kỳ Thủ + Slot Khán Giả)'
                   : isCoTuong
                   ? 'Phòng Chờ Cờ Tướng (2 Kỳ Thủ + 2 Khán Giả)'
+                  : isPhom
+                  ? 'Phòng Chờ Đánh Phỏm (Chuẩn 4 Người Chơi)'
                   : `Phòng chờ (${roomState.players.length}/4 người chơi)`}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
@@ -324,6 +330,8 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                   ? 'Cần đủ 2 kỳ thủ ở ghế X và O để bắt đầu. Luật: Ăn 5 chặn 2 đầu vẫn THẮNG. Thời gian 5 phút/bên!'
                   : isCoTuong
                   ? 'Cần đủ 2 kỳ thủ ở ghế Đỏ và Đen để bắt đầu trận đấu. Chủ phòng có thể chọn thể thức Tiêu Chuẩn hoặc Cờ Chớp.'
+                  : isPhom
+                  ? 'Game Phỏm yêu cầu đúng 4 người chơi và mỗi người có tối thiểu 200 xu để bắt đầu ván!'
                   : `Cần tối thiểu 2 người để bắt đầu ván. Chia sẻ mã ${roomState.code} để mời bạn bè cùng vào sòng!`}
               </p>
             </div>
@@ -336,6 +344,24 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
               <span>{copied ? 'Đã sao chép!' : 'Chia sẻ mã'}</span>
             </button>
           </div>
+
+          {/* Phỏm Information Banner */}
+          {isPhom && (
+            <div className="bg-purple-950/40 border border-purple-800/60 p-4 rounded-2xl shadow-sm">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-300">
+                  Luật Chơi Phỏm (Tá Lả)
+                </span>
+                <span className="text-[10px] bg-purple-900/60 text-purple-200 border border-purple-700 px-1.5 py-0.5 rounded font-mono font-bold">
+                  Bắt buộc 4 người • Tối thiểu 200 xu
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                🎴 Mỗi người 9 lá, 1 lá mở màn. Lượt gồm 2 bước: <strong>(1) Bốc nọc hoặc Ăn bài</strong> rác của người trước (ghép hạ phỏm), <strong>(2) Đánh 1 lá rác</strong>.
+                Đặc biệt: Khi có người đánh bài, mọi người có <strong>5 giây để CHẶT bài</strong> nếu có 2 lá tạo phỏm! Ván kết thúc khi có người Ù (hoặc Ù trắng x2 xu) hoặc hết nọc.
+              </p>
+            </div>
+          )}
 
           {/* Cờ Caro Information Banner */}
           {isCaro && (
@@ -623,6 +649,8 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                       ? '⏳ Cần có đủ 2 kỳ thủ ở ghế X và ghế O để bắt đầu trận cờ Caro 5 phút.'
                       : isCoTuong
                       ? '⏳ Cần có đủ 2 kỳ thủ ở ghế Đỏ và ghế Đen để bắt đầu trận cờ chớp.'
+                      : isPhom
+                      ? '⏳ Cần có đủ 4 người chơi để bắt đầu ván Phỏm (hiện có ' + roomState.players.length + '/4).'
                       : '⏳ Cần tối thiểu 2 người chơi để bắt đầu ván bài.'}
                   </span>
                 ) : (
@@ -631,6 +659,8 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                       ? '✅ Đã đủ 2 kỳ thủ X và O. Bạn có thể bấm bắt đầu trận đấu ngay!'
                       : isCoTuong
                       ? '✅ Đã đủ 2 kỳ thủ Đỏ và Đen. Bạn có thể bấm bắt đầu trận đấu ngay!'
+                      : isPhom
+                      ? '✅ Đã đủ 4 người chơi! Bạn có thể bấm bắt đầu ván Phỏm ngay!'
                       : '✅ Đã đủ điều kiện. Bạn có thể bắt đầu ván chơi bất cứ lúc nào!'}
                   </span>
                 )
