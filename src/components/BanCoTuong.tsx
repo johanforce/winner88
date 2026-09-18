@@ -86,9 +86,19 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'MOVES' | 'SPECTATORS' | 'CHAT'>('MOVES');
+  const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { participants: voiceParticipants, speakingMap } = useVoiceChat();
+
+  // Keep read count synchronized when chat tab is active
+  useEffect(() => {
+    if (activeTab === 'CHAT') {
+      setLastReadMessageCount(chatMessages.length);
+    }
+  }, [activeTab, chatMessages.length]);
+
+  const unreadChatCount = activeTab === 'CHAT' ? 0 : Math.max(0, chatMessages.length - lastReadMessageCount);
 
   // Endgame review & move inspection state
   const [isGameOverModalDismissed, setIsGameOverModalDismissed] = useState(false);
@@ -1061,13 +1071,22 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
 
             <button
               type="button"
-              onClick={() => setActiveTab('CHAT')}
+              id="btn-xiangqi-tab-chat"
+              onClick={() => {
+                setActiveTab('CHAT');
+                setLastReadMessageCount(chatMessages.length);
+              }}
               className={`flex-1 py-2 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 activeTab === 'CHAT' ? 'bg-amber-600 text-white shadow' : 'text-stone-400 hover:text-stone-200'
               }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Trò Chuyện</span>
+              {unreadChatCount > 0 && (
+                <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full animate-pulse shadow">
+                  +{unreadChatCount}
+                </span>
+              )}
             </button>
           </div>
 
@@ -1329,6 +1348,7 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 playerId={myPlayerId}
                 messages={chatMessages}
                 isOpen={true}
+                onReadAll={() => setLastReadMessageCount(chatMessages.length)}
               />
             </div>
           )}

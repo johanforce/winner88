@@ -63,22 +63,22 @@ export const BanCaro: React.FC<BanCaroProps> = ({
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number } | null>(null);
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
-  const [activeTab, setActiveTab] = useState<'MOVES' | 'SPECTATORS' | 'CHAT'>('MOVES');
+  const [activeTab, setActiveTab] = useState<'CHAT' | 'SPECTATORS'>('CHAT');
+  const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isGameOverModalDismissed, setIsGameOverModalDismissed] = useState(false);
   const [showMoveNumbers, setShowMoveNumbers] = useState(false);
 
   const { speakingMap } = useVoiceChat();
-  const moveListEndRef = useRef<HTMLDivElement>(null);
-  const lastMoveCountRef = useRef(0);
 
-  // Auto scroll move list
+  // Keep read count updated when chat tab is open
   useEffect(() => {
-    if (caro?.moveHistory && caro.moveHistory.length > lastMoveCountRef.current) {
-      lastMoveCountRef.current = caro.moveHistory.length;
-      moveListEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (activeTab === 'CHAT') {
+      setLastReadMessageCount(chatMessages.length);
     }
-  }, [caro?.moveHistory]);
+  }, [activeTab, chatMessages.length]);
+
+  const unreadChatCount = activeTab === 'CHAT' ? 0 : Math.max(0, chatMessages.length - lastReadMessageCount);
 
   // Audio feedback on new move
   useEffect(() => {
@@ -719,25 +719,35 @@ export const BanCaro: React.FC<BanCaroProps> = ({
           </div>
         </div>
 
-        {/* RIGHT SIDEBAR: TABS (HISTORY, SPECTATORS, CHAT) */}
+        {/* RIGHT SIDEBAR: TABS (DEFAULT: CHAT, SPECTATORS) */}
         <div className="w-full lg:w-80 h-[380px] lg:h-[600px] flex flex-col bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
           {/* Tab Selector */}
-          <div className="flex border-b border-slate-800 bg-slate-950/60">
+          <div className="flex border-b border-slate-800 bg-slate-950/60 shrink-0">
             <button
               type="button"
-              onClick={() => setActiveTab('MOVES')}
+              id="btn-caro-tab-chat"
+              onClick={() => {
+                setActiveTab('CHAT');
+                setLastReadMessageCount(chatMessages.length);
+              }}
               className={`flex-1 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === 'MOVES'
-                  ? 'text-cyan-400 border-b-2 border-cyan-400 bg-slate-900/50'
+                activeTab === 'CHAT'
+                  ? 'text-emerald-400 border-b-2 border-emerald-400 bg-slate-900/50'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
-              <History className="w-3.5 h-3.5" />
-              <span>Nước đi ({caro?.moveHistory.length || 0})</span>
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Trò chuyện</span>
+              {unreadChatCount > 0 && (
+                <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full animate-pulse shadow">
+                  +{unreadChatCount}
+                </span>
+              )}
             </button>
 
             <button
               type="button"
+              id="btn-caro-tab-spectators"
               onClick={() => setActiveTab('SPECTATORS')}
               className={`flex-1 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeTab === 'SPECTATORS'
@@ -748,68 +758,17 @@ export const BanCaro: React.FC<BanCaroProps> = ({
               <Eye className="w-3.5 h-3.5" />
               <span>Khán giả ({spectators.length})</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('CHAT')}
-              className={`flex-1 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeTab === 'CHAT'
-                  ? 'text-emerald-400 border-b-2 border-emerald-400 bg-slate-900/50'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Chat</span>
-            </button>
           </div>
 
-          {/* TAB 1: MOVE HISTORY */}
-          {activeTab === 'MOVES' && (
-            <div className="flex-1 p-3 overflow-y-auto space-y-1 font-mono text-xs">
-              {(!caro?.moveHistory || caro.moveHistory.length === 0) ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs text-center p-4">
-                  <History className="w-8 h-8 mb-2 opacity-30" />
-                  <p>Chưa có nước cờ nào được đánh.</p>
-                  <p className="text-[10px] mt-1 text-slate-400">Quân X đi trước!</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {caro.moveHistory.map((m, idx) => {
-                    const colLetter = String.fromCharCode(65 + m.x);
-                    const rowNum = m.y + 1;
-                    const isLast = idx === caro.moveHistory.length - 1;
-
-                    return (
-                      <div
-                        key={m.moveNumber}
-                        className={`flex items-center justify-between p-2 rounded-xl transition ${
-                          isLast
-                            ? 'bg-slate-800 border border-slate-700 text-white font-bold'
-                            : 'hover:bg-slate-800/40 text-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 text-slate-500 text-[10px]">#{m.moveNumber}</span>
-                          <span
-                            className={`w-5 h-5 rounded-md flex items-center justify-center font-black text-xs ${
-                              m.piece === 'X' ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-blue-950 text-blue-300 border border-blue-800'
-                            }`}
-                          >
-                            {m.piece}
-                          </span>
-                          <span>
-                            Ô ({colLetter}{rowNum})
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-sans">
-                          {m.piece === 'X' ? xPlayer?.name : oPlayer?.name}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  <div ref={moveListEndRef} />
-                </div>
-              )}
+          {/* TAB 1: CHAT (MẶC ĐỊNH CHO CỜ CARO) */}
+          {activeTab === 'CHAT' && (
+            <div className="flex-1 flex flex-col min-h-0">
+              <KhungChat
+                roomCode={roomState.code}
+                playerId={myPlayerId}
+                messages={chatMessages}
+                onReadAll={() => setLastReadMessageCount(chatMessages.length)}
+              />
             </div>
           )}
 
@@ -841,17 +800,6 @@ export const BanCaro: React.FC<BanCaroProps> = ({
                   </div>
                 ))
               )}
-            </div>
-          )}
-
-          {/* TAB 3: CHAT */}
-          {activeTab === 'CHAT' && (
-            <div className="flex-1 flex flex-col min-h-0">
-              <KhungChat
-                roomCode={roomState.code}
-                myPlayerId={myPlayerId}
-                chatMessages={chatMessages}
-              />
             </div>
           )}
         </div>

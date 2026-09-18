@@ -5,11 +5,14 @@ import { socket } from '../socket';
 
 interface KhungChatProps {
   roomCode: string;
-  playerId: string;
-  messages: ChatMessage[];
+  playerId?: string;
+  myPlayerId?: string;
+  messages?: ChatMessage[];
+  chatMessages?: ChatMessage[];
   isOpen?: boolean;
   onClose?: () => void;
   isFloating?: boolean;
+  onReadAll?: () => void;
 }
 
 const QUICK_CHATS = [
@@ -24,15 +27,28 @@ const QUICK_CHATS = [
 export const KhungChat: React.FC<KhungChatProps> = ({
   roomCode,
   playerId,
+  myPlayerId,
   messages,
+  chatMessages,
   isOpen = true,
   onClose,
   isFloating = false,
+  onReadAll,
 }) => {
+  const effectiveMessages = messages ?? chatMessages ?? [];
+  const effectivePlayerId = playerId ?? myPlayerId ?? '';
+
   const [inputText, setInputText] = useState('');
   const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
+
+  // Notify parent component that messages have been read whenever chat is visible
+  useEffect(() => {
+    if (isOpen) {
+      onReadAll?.();
+    }
+  }, [isOpen, effectiveMessages.length, onReadAll]);
 
   const handleScroll = () => {
     if (!chatContainerRef.current) return;
@@ -40,8 +56,11 @@ export const KhungChat: React.FC<KhungChatProps> = ({
     const distanceToBottom = scrollHeight - (scrollTop + clientHeight);
     const nearBottom = distanceToBottom < 75;
     isNearBottomRef.current = nearBottom;
-    if (nearBottom && hasUnreadBelow) {
-      setHasUnreadBelow(false);
+    if (nearBottom) {
+      if (hasUnreadBelow) {
+        setHasUnreadBelow(false);
+      }
+      onReadAll?.();
     }
   };
 
@@ -53,6 +72,7 @@ export const KhungChat: React.FC<KhungChatProps> = ({
     });
     setHasUnreadBelow(false);
     isNearBottomRef.current = true;
+    onReadAll?.();
   };
 
   useEffect(() => {
@@ -65,7 +85,7 @@ export const KhungChat: React.FC<KhungChatProps> = ({
     } else {
       setHasUnreadBelow(true);
     }
-  }, [messages.length]);
+  }, [effectiveMessages.length]);
 
   const handleSend = (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
@@ -73,7 +93,7 @@ export const KhungChat: React.FC<KhungChatProps> = ({
 
     socket.emit('CHAT_MESSAGE', {
       roomCode,
-      playerId,
+      playerId: effectivePlayerId,
       text,
     });
 
@@ -128,12 +148,12 @@ export const KhungChat: React.FC<KhungChatProps> = ({
         className="flex-1 p-3 overflow-y-auto scroll-smooth overscroll-contain touch-pan-y space-y-2.5 text-xs select-text"
         style={{ WebkitOverflowScrolling: 'touch' }}
       >
-        {messages.length === 0 ? (
+        {effectiveMessages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-500 italic select-none">
             Chưa có tin nhắn nào. Hãy gửi lời chào!
           </div>
         ) : (
-          messages.map((msg) => {
+          effectiveMessages.map((msg) => {
             if (msg.isSystem) {
               return (
                 <div key={msg.id} className="text-center my-1.5">
@@ -144,7 +164,7 @@ export const KhungChat: React.FC<KhungChatProps> = ({
               );
             }
 
-            const isMe = msg.senderId === playerId;
+            const isMe = msg.senderId === effectivePlayerId;
 
             return (
               <div

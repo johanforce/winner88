@@ -47,11 +47,21 @@ export const BanChoi: React.FC<BanChoiProps> = ({
   const [selectedCardIds, setSelectedCardIds] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'RANK' | 'SUIT'>('RANK');
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [hasDismissedBaoSam, setHasDismissedBaoSam] = useState(false);
 
   const { participants: voiceParticipants, speakingMap } = useVoiceChat();
+
+  // Keep read count synchronized when chat drawer is open
+  useEffect(() => {
+    if (isChatOpen) {
+      setLastReadMessageCount(chatMessages.length);
+    }
+  }, [isChatOpen, chatMessages.length]);
+
+  const unreadChatCount = isChatOpen ? 0 : Math.max(0, chatMessages.length - lastReadMessageCount);
 
   // Reset trạng thái ẩn dialog Báo Sâm khi ván mới bắt đầu hoặc hết giai đoạn Báo Sâm
   useEffect(() => {
@@ -334,20 +344,28 @@ export const BanChoi: React.FC<BanChoiProps> = ({
           </button>
 
           <button
-            onClick={() => setIsChatOpen((v) => !v)}
+            onClick={() => {
+              setIsChatOpen((v) => {
+                const next = !v;
+                if (next) {
+                  setLastReadMessageCount(chatMessages.length);
+                }
+                return next;
+              });
+            }}
             id="btn-toggle-chat"
             className={`p-2 sm:px-3 sm:py-1 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition touch-manipulation cursor-pointer ${
               isChatOpen
-                ? 'bg-emerald-600 border-emerald-500 text-white'
+                ? 'bg-emerald-600 border-emerald-500 text-white shadow'
                 : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
             }`}
             title="Khung chat"
           >
             <MessageSquare className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
             <span className="hidden sm:inline">Chat</span>
-            {chatMessages.length > 0 && (
-              <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
-                {chatMessages.length}
+            {unreadChatCount > 0 && (
+              <span className="bg-emerald-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full animate-pulse shadow">
+                +{unreadChatCount}
               </span>
             )}
           </button>
@@ -588,6 +606,7 @@ export const BanChoi: React.FC<BanChoiProps> = ({
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
         isFloating={true}
+        onReadAll={() => setLastReadMessageCount(chatMessages.length)}
       />
 
       {/* Rule Guide Modal */}

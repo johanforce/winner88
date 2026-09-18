@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Crown,
   Copy,
@@ -42,8 +42,17 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'SEATS' | 'CHAT'>('SEATS');
+  const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
 
   const { participants: voiceParticipants, speakingMap } = useVoiceChat();
+
+  useEffect(() => {
+    if (mobileTab === 'CHAT') {
+      setLastReadMessageCount(chatMessages.length);
+    }
+  }, [mobileTab, chatMessages.length]);
+
+  const unreadChatCount = mobileTab === 'CHAT' ? 0 : Math.max(0, chatMessages.length - lastReadMessageCount);
 
   const me = roomState.players.find((p) => p.id === myPlayerId);
   const isHost = me?.isHost || false;
@@ -278,13 +287,22 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setMobileTab('CHAT')}
+            id="btn-waiting-tab-chat"
+            onClick={() => {
+              setMobileTab('CHAT');
+              setLastReadMessageCount(chatMessages.length);
+            }}
             className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation ${
               mobileTab === 'CHAT' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <MessageSquare className="w-4 h-4" />
-            <span>Trò Chuyện {chatMessages.length > 0 && `(${chatMessages.length})`}</span>
+            <span>Trò Chuyện</span>
+            {unreadChatCount > 0 && (
+              <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full animate-pulse shadow">
+                +{unreadChatCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -649,6 +667,7 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
             playerId={myPlayerId}
             messages={chatMessages}
             isOpen={true}
+            onReadAll={() => setLastReadMessageCount(chatMessages.length)}
           />
         </div>
       </main>
