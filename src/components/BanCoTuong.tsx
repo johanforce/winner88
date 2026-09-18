@@ -48,6 +48,7 @@ import {
   getPieceNameVN,
   isSideInCheck,
 } from '../utils/xiangqiLogic';
+import { findBestXiangqiMove, XiangqiAiHint } from '../utils/xiangqiAi';
 
 interface BanCoTuongProps {
   roomState: RoomPublicState;
@@ -89,7 +90,60 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Secret AI Assistant (Sunfish Xiangqi Engine) activated via "lickmyball", deactivated via "sonofbitch"
+  const [isAiHintActive, setIsAiHintActive] = useState<boolean>(false);
+  const [aiHint, setAiHint] = useState<XiangqiAiHint | null>(null);
+  const [isCalculatingHint, setIsCalculatingHint] = useState<boolean>(false);
+  const [aiToastMessage, setAiToastMessage] = useState<string | null>(null);
+
   const { participants: voiceParticipants, speakingMap } = useVoiceChat();
+
+  // Auto-dismiss AI toast after 4s
+  useEffect(() => {
+    if (aiToastMessage) {
+      const t = setTimeout(() => setAiToastMessage(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [aiToastMessage]);
+
+  // Compute best move whenever it's my turn and AI assistant is enabled
+  useEffect(() => {
+    if (!isAiHintActive || !isMyTurn || isSpectator || !mySide || !xiangqi?.pieces || xiangqi.winnerSide) {
+      setAiHint(null);
+      return;
+    }
+
+    setIsCalculatingHint(true);
+    const timer = setTimeout(() => {
+      try {
+        const best = findBestXiangqiMove(xiangqi.pieces, mySide, 2);
+        setAiHint(best);
+      } catch (err) {
+        console.error('Error calculating AI hint:', err);
+      } finally {
+        setIsCalculatingHint(false);
+      }
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [isAiHintActive, isMyTurn, isSpectator, mySide, xiangqi?.pieces, xiangqi?.winnerSide]);
+
+  // Handle secret chat trigger commands
+  const handleInterceptChat = (text: string): boolean => {
+    const clean = text.trim().toLowerCase();
+    if (clean === 'lickmyball') {
+      setIsAiHintActive(true);
+      setAiToastMessage('⚡ Đã kích hoạt Trợ lý Cờ Tướng Sunfish! Gợi ý nước đi sẽ hiển thị khi đến lượt bạn.');
+      return true;
+    }
+    if (clean === 'sonofbitch') {
+      setIsAiHintActive(false);
+      setAiHint(null);
+      setAiToastMessage('🛑 Đã TẮT trợ lý Cờ Tướng.');
+      return true;
+    }
+    return false;
+  };
 
   // Keep read count synchronized when chat tab is active
   useEffect(() => {
@@ -810,6 +864,12 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                     const isReviewedTo =
                       reviewedMove && reviewedMove.to.x === x && reviewedMove.to.y === y;
 
+                    // AI Suggestion Indicators (Sunfish Engine)
+                    const isAiHintFrom =
+                      isAiHintActive && isMyTurn && !isSpectator && aiHint && aiHint.from.x === x && aiHint.from.y === y;
+                    const isAiHintTo =
+                      isAiHintActive && isMyTurn && !isSpectator && aiHint && aiHint.to.x === x && aiHint.to.y === y;
+
                     return (
                       <div
                         key={`cell-${vx}-${vy}`}
@@ -833,6 +893,23 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                         {isReviewedTo && (
                           <div className="absolute w-[94%] h-[94%] max-w-[54px] max-h-[54px] rounded-full border-2 border-cyan-400 bg-cyan-500/35 ring-4 ring-cyan-400/60 pointer-events-none z-30 flex items-center justify-center animate-pulse shadow-lg">
                             <span className="text-[9px] font-black bg-cyan-400 text-stone-950 px-1 py-0.2 rounded shadow tracking-tight">
+                              ĐẾN
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Secret AI Hint Halos (Sunfish) */}
+                        {isAiHintFrom && (
+                          <div className="absolute w-[94%] h-[94%] max-w-[54px] max-h-[54px] rounded-full border-2 border-dashed border-violet-400 bg-violet-600/30 ring-4 ring-violet-500/50 pointer-events-none z-30 flex items-center justify-center shadow-lg animate-pulse">
+                            <span className="text-[8px] font-black bg-violet-600 text-white px-1 py-0.2 rounded shadow tracking-tight">
+                              GỢI Ý
+                            </span>
+                          </div>
+                        )}
+
+                        {isAiHintTo && (
+                          <div className="absolute w-[94%] h-[94%] max-w-[54px] max-h-[54px] rounded-full border-2 border-emerald-400 bg-emerald-500/30 ring-4 ring-emerald-400/60 pointer-events-none z-30 flex items-center justify-center animate-pulse shadow-lg">
+                            <span className="text-[8px] font-black bg-emerald-500 text-slate-950 px-1 py-0.2 rounded shadow tracking-tight">
                               ĐẾN
                             </span>
                           </div>
@@ -1037,6 +1114,46 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 <Flag className="w-4 h-4" />
                 <span>Đầu Hàng</span>
               </button>
+            </div>
+          )}
+
+          {/* Secret AI Hint Banner (Sunfish) */}
+          {isAiHintActive && !isSpectator && !xiangqi?.winnerSide && (
+            <div className="w-full mt-2.5 p-3 bg-gradient-to-r from-violet-950/90 via-purple-950/80 to-slate-900/90 border border-violet-600/80 rounded-2xl flex items-center justify-between text-xs text-violet-100 shadow-xl backdrop-blur-sm animate-fadeIn">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-violet-600/40 border border-violet-400/60 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4 text-violet-300 animate-pulse" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-extrabold text-[11px] text-violet-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>Trợ Lý Sunfish AI</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+                  </div>
+                  <div className="truncate text-xs">
+                    {isCalculatingHint ? (
+                      <span className="text-violet-300/80 italic">Đang tính toán thế cờ...</span>
+                    ) : isMyTurn && aiHint ? (
+                      <span>
+                        Nước đi tốt nhất:{' '}
+                        <strong className="text-emerald-300 font-black text-sm underline decoration-emerald-400 ml-1">
+                          {aiHint.notation}
+                        </strong>
+                      </span>
+                    ) : (
+                      <span className="text-stone-400">Đợi đối thủ đi xong...</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {isMyTurn && aiHint && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedPieceId(aiHint.piece.id)}
+                  className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold text-xs shadow-md transition cursor-pointer shrink-0 ml-2"
+                >
+                  Chọn Quân
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1349,6 +1466,7 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 messages={chatMessages}
                 isOpen={true}
                 onReadAll={() => setLastReadMessageCount(chatMessages.length)}
+                onInterceptMessage={handleInterceptChat}
               />
             </div>
           )}
@@ -1568,6 +1686,14 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
         onClose={() => setIsRuleModalOpen(false)}
         defaultRule="CO_TUONG"
       />
+
+      {/* Discreet AI Activation Toast Notification */}
+      {aiToastMessage && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-slate-950/95 border border-violet-500/80 text-violet-200 rounded-full shadow-2xl text-xs font-bold backdrop-blur-md flex items-center gap-2.5 animate-bounce">
+          <Sparkles className="w-4 h-4 text-violet-400 shrink-0" />
+          <span>{aiToastMessage}</span>
+        </div>
+      )}
     </div>
   );
 };

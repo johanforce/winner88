@@ -13,6 +13,7 @@ interface KhungChatProps {
   onClose?: () => void;
   isFloating?: boolean;
   onReadAll?: () => void;
+  onInterceptMessage?: (text: string) => boolean;
 }
 
 const QUICK_CHATS = [
@@ -34,6 +35,7 @@ export const KhungChat: React.FC<KhungChatProps> = ({
   onClose,
   isFloating = false,
   onReadAll,
+  onInterceptMessage,
 }) => {
   const effectiveMessages = messages ?? chatMessages ?? [];
   const effectivePlayerId = playerId ?? myPlayerId ?? '';
@@ -90,6 +92,14 @@ export const KhungChat: React.FC<KhungChatProps> = ({
   const handleSend = (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
     if (!text) return;
+
+    // Check if parent wants to intercept hidden command silently
+    if (onInterceptMessage && onInterceptMessage(text)) {
+      if (!textToSend) {
+        setInputText('');
+      }
+      return;
+    }
 
     socket.emit('CHAT_MESSAGE', {
       roomCode,
