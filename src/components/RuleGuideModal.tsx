@@ -8,6 +8,7 @@ import {
   Flame,
   ShieldAlert,
   Award,
+  Clock,
 } from 'lucide-react';
 import { GameRule } from '../types';
 
@@ -77,6 +78,16 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
             }`}
           >
             <span>🏆 Cờ Tướng</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('CARO')}
+            className={`pb-2.5 px-2.5 sm:px-3 font-semibold text-xs sm:text-sm transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer touch-manipulation ${
+              activeTab === 'CARO'
+                ? 'border-cyan-500 text-cyan-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>❌⭕ Cờ Caro</span>
           </button>
           <button
             onClick={() => setActiveTab('PENALTY_RATES')}
@@ -302,6 +313,45 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                   &bull; <strong>Đầu hàng:</strong> Có thể xin đầu hàng bất kỳ lúc nào nếu cảm thấy thế cờ không thể cứu vãn.<br />
                   &bull; <strong>Xin hòa cờ:</strong> Kỳ thủ có thể bấm &quot;Xin hòa&quot;. Nếu đối phương đồng ý, trận đấu kết thúc với kết quả hòa (không trừ xu).
                 </p>
+              </div>
+            </>
+          ) : activeTab === 'CARO' ? (
+            /* TAB CARO: LUẬT CỜ CARO (ĂN 5 CHẶN 2 ĐẦU VẪN THẮNG, 5 PHÚT BLITZ) */
+            <>
+              <div className="bg-cyan-950/40 border border-cyan-800/40 p-3.5 rounded-xl">
+                <h3 className="font-bold text-cyan-300 mb-1 flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-cyan-400" /> Luật Ăn 5 Chặn 2 Đầu Vẫn Thắng
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  &bull; <strong>Quy tắc chiến thắng đặc biệt:</strong> Người chơi tạo thành một chuỗi gồm đúng hoặc nhiều hơn <strong>5 quân cờ liên tiếp</strong> (theo chiều ngang, dọc hoặc chéo) sẽ <strong>GIÀNH CHIẾN THẮNG NGAY LẬP TỨC</strong>.<br />
+                  &bull; <strong>Chặn 2 đầu:</strong> Kể cả khi chuỗi 5 quân bị đối phương chặn ở một đầu hay <strong>bị chặn ở CẢ HAI ĐẦU</strong> thì người tạo đủ 5 quân <strong>VẪN ĐƯỢC TÍNH LÀ THẮNG</strong> (đúng theo luật cờ quy định).<br />
+                  &bull; <strong>Bàn cờ thi đấu:</strong> Kích thước chuẩn <strong>15x15</strong> ô kẻ caro, có các điểm hoa tiêu (star points) tiêu chuẩn.
+                </p>
+              </div>
+
+              <div className="bg-amber-950/40 border border-amber-800/40 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-amber-400" /> Thời Gian Thi Đấu: 5 Phút / Bên (Blitz)
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  &bull; <strong>Đồng hồ 5 phút:</strong> Mỗi kỳ thủ bắt đầu ván cờ với đúng <strong>5 phút (300 giây)</strong> tổng quỹ thời gian suy nghĩ.<br />
+                  &bull; <strong>Xử thua hết giờ (Timeout):</strong> Khi đồng hồ của bạn đếm ngược về <strong>00:00</strong>, hệ thống sẽ xử bạn <strong>THUA CUỘC NGAY LẬP TỨC</strong>. Đối thủ được công nhận chiến thắng (+100 xu).<br />
+                  &bull; <strong>Đồng hồ cảnh báo:</strong> Khi thời gian còn dưới 30 giây, đồng hồ sẽ nhấp nháy đỏ để cảnh báo người chơi.
+                </p>
+              </div>
+
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> Lượt Đi &amp; Các Tính Năng
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li><strong>Quân X (Ghế 1):</strong> Luôn là bên được quyền đánh trước nước đầu tiên.</li>
+                  <li><strong>Quân O (Ghế 2):</strong> Đánh sau quân X.</li>
+                  <li><strong>Xin hòa:</strong> Bạn có thể gửi đề nghị hòa cờ bất kỳ lúc nào. Nếu đối phương bấm Đồng ý thì ván cờ hòa.</li>
+                  <li><strong>Đầu hàng (Xin thua):</strong> Chủ động nhận thua nếu thấy thế cờ bất lợi.</li>
+                  <li><strong>Hiển thị số nước đi:</strong> Bấm nút <strong>123</strong> trên góc phải bàn cờ để xem số thứ tự từng nước cờ đã đánh.</li>
+                  <li><strong>Khán giả theo dõi:</strong> Bạn bè có thể vào phòng xem trực tiếp và đàm thoại Voice Chat thời gian thực.</li>
+                </ul>
               </div>
             </>
           ) : (

@@ -1,6 +1,8 @@
 {
   "name": "Winner88 - Game Bài & Cờ Tướng Cờ Chớp Online",
-  "description": "Nền tảng thi đấu Tiến Lên Miền Nam, Sâm Lốc và Cờ Tướng (thể thức Tiêu chuẩn Quốc tế 60p+30s hoặc Cờ chớp 5p) thời gian thực, hỗ trợ 2 kỳ thủ và 2 slot theo dõi trực tiếp.",
-  "requestFramePermissions": [],
+  "description": "Nền tảng thi đấu Tiến Lên Miền Nam, Sâm Lốc, Cờ Tướng và Cờ Caro (5 phút/bên, ăn 5 chặn 2 đầu vẫn thắng) thời gian thực, voice chat và phòng chờ trực tiếp.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

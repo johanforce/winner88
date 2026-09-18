@@ -19,6 +19,9 @@ import { Lobby } from './components/Lobby';
 import { PhongChoi } from './components/PhongChoi';
 import { BanChoi } from './components/BanChoi';
 import { BanCoTuong } from './components/BanCoTuong';
+import { BanCaro } from './components/BanCaro';
+import { VoiceChatProvider } from './context/VoiceChatContext';
+import { VoiceChatWidget } from './components/VoiceChatWidget';
 import { WifiOff, AlertTriangle } from 'lucide-react';
 
 export default function App() {
@@ -295,7 +298,12 @@ export default function App() {
       )}
 
       {currentScreen === 'ROOM' && roomState && (
-        <>
+        <VoiceChatProvider
+          roomCode={roomState.code}
+          playerId={profile.id}
+          playerName={profile.name}
+          playerAvatar={profile.avatar}
+        >
           {roomState.status === 'WAITING' ? (
             <PhongChoi
               roomState={roomState}
@@ -310,6 +318,13 @@ export default function App() {
               chatMessages={chatMessages}
               onLeaveRoom={handleLeaveRoom}
             />
+          ) : roomState.rule === 'CARO' ? (
+            <BanCaro
+              roomState={roomState}
+              myPlayerId={profile.id}
+              chatMessages={chatMessages}
+              onLeaveRoom={handleLeaveRoom}
+            />
           ) : (
             <BanChoi
               roomState={roomState}
@@ -319,7 +334,15 @@ export default function App() {
               onLeaveRoom={handleLeaveRoom}
             />
           )}
-        </>
+
+          {/* Floating Voice Chat Controls (persistent across waiting and in-game) */}
+          <div className="fixed bottom-3 right-3 sm:bottom-4 sm:right-4 z-40">
+            <VoiceChatWidget
+              roomState={roomState}
+              myPlayerId={profile.id}
+            />
+          </div>
+        </VoiceChatProvider>
       )}
     </div>
   );

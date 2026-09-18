@@ -103,7 +103,14 @@ export class RoomManager {
   }
 
   private generateRoomCode(rule: GameRule): string {
-    const prefix = rule === 'TIEN_LEN_MIEN_NAM' ? 'TL' : rule === 'SAM_LOC' ? 'SL' : 'CT';
+    const prefix =
+      rule === 'TIEN_LEN_MIEN_NAM'
+        ? 'TL'
+        : rule === 'SAM_LOC'
+        ? 'SL'
+        : rule === 'CO_TUONG'
+        ? 'CT'
+        : 'CR';
     let code = '';
     let attempts = 0;
     do {

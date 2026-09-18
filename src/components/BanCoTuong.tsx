@@ -24,6 +24,10 @@ import {
   ChevronsRight,
   Swords,
   Maximize2,
+  Mic,
+  MicOff,
+  Radio,
+  Headphones,
 } from 'lucide-react';
 import {
   RoomPublicState,
@@ -36,6 +40,7 @@ import {
 import { socket } from '../socket';
 import { KhungChat } from './KhungChat';
 import { RuleGuideModal } from './RuleGuideModal';
+import { useVoiceChat } from '../context/VoiceChatContext';
 import {
   getPieceAt,
   getLegalMoves,
@@ -82,6 +87,8 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'MOVES' | 'SPECTATORS' | 'CHAT'>('MOVES');
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const { participants: voiceParticipants, speakingMap } = useVoiceChat();
 
   // Endgame review & move inspection state
   const [isGameOverModalDismissed, setIsGameOverModalDismissed] = useState(false);
@@ -453,20 +460,62 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
             const oppTime = oppSide === 'RED' ? xiangqi?.redTimeRemaining ?? 0 : xiangqi?.blackTimeRemaining ?? 0;
             const isOppTurn = xiangqi?.currentSide === oppSide && !xiangqi.winnerSide;
             const isLowTime = oppTime <= 30;
+            const voiceUser = opp ? voiceParticipants.find((vp) => vp.playerId === opp.id) : null;
+            const isSpeaking = opp ? speakingMap[opp.id] || voiceUser?.isSpeaking : false;
 
             return (
               <div
                 className={`w-full mb-3 px-4 py-2.5 rounded-2xl border transition-all flex items-center justify-between shadow-md ${
-                  isOppTurn
+                  isSpeaking
+                    ? 'bg-stone-900 border-emerald-500/80 shadow-emerald-950/40 ring-2 ring-emerald-500/30'
+                    : isOppTurn
                     ? 'bg-stone-900 border-amber-500/60 shadow-amber-950/30'
                     : 'bg-stone-900/80 border-stone-800'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="relative">
-                    <span className="text-3xl">{opp?.avatar || (oppSide === 'RED' ? '🔴' : '⚫')}</span>
+                    <span
+                      className={`text-3xl inline-block transition-all rounded-full ${
+                        isSpeaking ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-stone-900 animate-pulse' : ''
+                      }`}
+                    >
+                      {opp?.avatar || (oppSide === 'RED' ? '🔴' : '⚫')}
+                    </span>
                     {opp?.isHost && (
                       <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-400 absolute -top-1 -right-1" />
+                    )}
+                    {voiceUser && (
+                      <div
+                        className={`absolute -bottom-1 -left-1 p-0.5 rounded-full border shadow z-20 ${
+                          voiceUser.hasMic === false
+                            ? 'bg-sky-950 border-sky-700 text-sky-400'
+                            : voiceUser.isMuted
+                            ? 'bg-stone-900 border-stone-700 text-stone-400'
+                            : isSpeaking
+                            ? 'bg-emerald-500 border-emerald-300 text-slate-950 animate-bounce'
+                            : 'bg-emerald-950 border-emerald-700 text-emerald-400'
+                        }`}
+                        title={
+                          voiceUser.hasMic === false
+                            ? 'Đang nghe phòng 🎧'
+                            : voiceUser.isMuted
+                            ? 'Đã tắt mic'
+                            : isSpeaking
+                            ? 'Đang nói...'
+                            : 'Đang bật mic'
+                        }
+                      >
+                        {voiceUser.hasMic === false ? (
+                          <Headphones className="w-2.5 h-2.5" />
+                        ) : voiceUser.isMuted ? (
+                          <MicOff className="w-2.5 h-2.5" />
+                        ) : isSpeaking ? (
+                          <Radio className="w-2.5 h-2.5" />
+                        ) : (
+                          <Mic className="w-2.5 h-2.5" />
+                        )}
+                      </div>
                     )}
                   </div>
                   <div>
@@ -474,6 +523,11 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                       <span className="font-extrabold text-sm text-stone-100">
                         {opp?.name || (oppSide === 'RED' ? 'Kỳ thủ Đỏ' : 'Kỳ thủ Đen')}
                       </span>
+                      {isSpeaking && (
+                        <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-bold animate-pulse">
+                          Đang nói 🎙️
+                        </span>
+                      )}
                       <span
                         className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
                           oppSide === 'RED'
@@ -837,20 +891,62 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
             const myTime = myCurrentSide === 'RED' ? xiangqi?.redTimeRemaining ?? 0 : xiangqi?.blackTimeRemaining ?? 0;
             const isTurn = xiangqi?.currentSide === myCurrentSide && !xiangqi.winnerSide;
             const isLowTime = myTime <= 30;
+            const voiceUser = mePlayer ? voiceParticipants.find((vp) => vp.playerId === mePlayer.id) : null;
+            const isSpeaking = mePlayer ? speakingMap[mePlayer.id] || voiceUser?.isSpeaking : false;
 
             return (
               <div
                 className={`w-full mt-3 px-4 py-2.5 rounded-2xl border transition-all flex items-center justify-between shadow-md ${
-                  isTurn
+                  isSpeaking
+                    ? 'bg-stone-900 border-emerald-500/80 shadow-emerald-950/40 ring-2 ring-emerald-500/30'
+                    : isTurn
                     ? 'bg-stone-900 border-amber-500/60 shadow-amber-950/30 ring-1 ring-amber-500/30'
                     : 'bg-stone-900/80 border-stone-800'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="relative">
-                    <span className="text-3xl">{mePlayer?.avatar || (myCurrentSide === 'RED' ? '🔴' : '⚫')}</span>
+                    <span
+                      className={`text-3xl inline-block transition-all rounded-full ${
+                        isSpeaking ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-stone-900 animate-pulse' : ''
+                      }`}
+                    >
+                      {mePlayer?.avatar || (myCurrentSide === 'RED' ? '🔴' : '⚫')}
+                    </span>
                     {mePlayer?.isHost && (
                       <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-400 absolute -top-1 -right-1" />
+                    )}
+                    {voiceUser && (
+                      <div
+                        className={`absolute -bottom-1 -left-1 p-0.5 rounded-full border shadow z-20 ${
+                          voiceUser.hasMic === false
+                            ? 'bg-sky-950 border-sky-700 text-sky-400'
+                            : voiceUser.isMuted
+                            ? 'bg-stone-900 border-stone-700 text-stone-400'
+                            : isSpeaking
+                            ? 'bg-emerald-500 border-emerald-300 text-slate-950 animate-bounce'
+                            : 'bg-emerald-950 border-emerald-700 text-emerald-400'
+                        }`}
+                        title={
+                          voiceUser.hasMic === false
+                            ? 'Đang nghe phòng 🎧'
+                            : voiceUser.isMuted
+                            ? 'Đã tắt mic'
+                            : isSpeaking
+                            ? 'Đang nói...'
+                            : 'Đang bật mic'
+                        }
+                      >
+                        {voiceUser.hasMic === false ? (
+                          <Headphones className="w-2.5 h-2.5" />
+                        ) : voiceUser.isMuted ? (
+                          <MicOff className="w-2.5 h-2.5" />
+                        ) : isSpeaking ? (
+                          <Radio className="w-2.5 h-2.5" />
+                        ) : (
+                          <Mic className="w-2.5 h-2.5" />
+                        )}
+                      </div>
                     )}
                   </div>
                   <div>
@@ -861,6 +957,11 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                       {me?.id === mePlayer?.id && (
                         <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded font-bold">
                           Bạn
+                        </span>
+                      )}
+                      {isSpeaking && (
+                        <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-bold animate-pulse">
+                          Đang nói 🎙️
                         </span>
                       )}
                       <span

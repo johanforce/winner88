@@ -1,6 +1,35 @@
 export type Suit = 'SPADE' | 'CLUB' | 'DIAMOND' | 'HEART';
 
-export type GameRule = 'TIEN_LEN_MIEN_NAM' | 'SAM_LOC' | 'CO_TUONG';
+export type GameRule = 'TIEN_LEN_MIEN_NAM' | 'SAM_LOC' | 'CO_TUONG' | 'CARO';
+
+// --- CỜ CARO TYPES ---
+export type CaroPiece = 'X' | 'O';
+
+export interface CaroMove {
+  x: number; // 0..14
+  y: number; // 0..14
+  piece: CaroPiece;
+  playerId: string;
+  moveNumber: number;
+  timestamp: number;
+}
+
+export interface CaroState {
+  board: (CaroPiece | null)[][]; // 15x15 grid
+  currentTurn: CaroPiece; // 'X' đi trước
+  xPlayerId: string | null;
+  oPlayerId: string | null;
+  spectatorIds: string[];
+  xTimeRemaining: number; // 300s (5 phút)
+  oTimeRemaining: number; // 300s (5 phút)
+  initialTime: number; // 300
+  lastMove: CaroMove | null;
+  moveHistory: CaroMove[];
+  winningLine?: { x: number; y: number }[] | null;
+  winnerPiece: CaroPiece | 'DRAW' | null;
+  winReason?: 'FIVE_IN_A_ROW' | 'TIMEOUT' | 'RESIGN' | 'AGREED_DRAW';
+  drawOfferFrom?: CaroPiece | null;
+}
 
 // --- CỜ TƯỚNG (XIANGQI) TYPES ---
 export type XiangqiPieceType =
@@ -103,6 +132,7 @@ export interface PlayerPublicInfo {
   score: number;
   isSpectator?: boolean;
   xiangqiSide?: XiangqiSide;
+  caroPiece?: CaroPiece;
 }
 
 export interface ChatMessage {
@@ -150,7 +180,26 @@ export interface RoomPublicState {
   mustPlayThreeOfSpades?: boolean;
   samLocState?: SamLocState;
   xiangqiState?: XiangqiState;
+  caroState?: CaroState;
   results?: GameResultRecord[];
+  voiceParticipants?: VoiceParticipant[];
+}
+
+export interface VoiceParticipant {
+  socketId: string;
+  playerId: string;
+  playerName: string;
+  playerAvatar: string;
+  isMuted: boolean;
+  isSpeaking: boolean;
+  hasMic?: boolean;
+  joinedAt: number;
+}
+
+export interface VoiceSignalData {
+  type: 'offer' | 'answer' | 'candidate';
+  sdp?: any;
+  candidate?: any;
 }
 
 export interface RoomListItem {

@@ -140,8 +140,16 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       (data: { roomCode: string; playerId: string }, callback) => {
         // Socket rời phòng roomCode TRƯỚC để không nhận broadcast ROOM_STATE kéo ngược lại phòng
         socket.leave(data.roomCode);
+        socket.leave(`voice_${data.roomCode}`);
         const room = roomManager.getRoom(data.roomCode);
         if (room) {
+          const voiceLeft = room.leaveVoice(socket.id);
+          if (voiceLeft) {
+            io.to(`voice_${room.code}`).emit('VOICE_USER_LEFT', {
+              socketId: socket.id,
+              playerId: voiceLeft.playerId,
+            });
+          }
           roomManager.unregisterPlayer(data.playerId);
           const isEmpty = room.removePlayer(data.playerId);
 
@@ -403,6 +411,76 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       }
     );
 
+    // 8.6. Đánh nước cờ Caro (Ăn 5 chặn 2 đầu vẫn win, 5 phút/bên)
+    socket.on(
+      'GAME_CARO_MOVE',
+      (
+        data: {
+          roomCode: string;
+          playerId: string;
+          x: number;
+          y: number;
+        },
+        callback
+      ) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const res = room.playCaroMove(data.playerId, data.x, data.y);
+        if (res.success) {
+          broadcastRoomUpdate(data.roomCode);
+        }
+        callback?.(res);
+      }
+    );
+
+    // 8.7. Đầu hàng cờ Caro
+    socket.on('GAME_CARO_RESIGN', (data: { roomCode: string; playerId: string }, callback) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (!room) {
+        callback?.({ success: false, message: 'Phòng không tồn tại' });
+        return;
+      }
+      const res = room.resignCaro(data.playerId);
+      if (res.success) {
+        broadcastRoomUpdate(data.roomCode);
+      }
+      callback?.(res);
+    });
+
+    // 8.8. Đề nghị hòa cờ Caro
+    socket.on('GAME_CARO_OFFER_DRAW', (data: { roomCode: string; playerId: string }, callback) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (!room) {
+        callback?.({ success: false, message: 'Phòng không tồn tại' });
+        return;
+      }
+      const res = room.offerCaroDraw(data.playerId);
+      if (res.success) {
+        broadcastRoomUpdate(data.roomCode);
+      }
+      callback?.(res);
+    });
+
+    // 8.9. Phản hồi lời mời hòa cờ Caro
+    socket.on(
+      'GAME_CARO_RESPOND_DRAW',
+      (data: { roomCode: string; playerId: string; accept: boolean }, callback) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const res = room.respondCaroDraw(data.playerId, data.accept);
+        if (res.success) {
+          broadcastRoomUpdate(data.roomCode);
+        }
+        callback?.(res);
+      }
+    );
+
     // 9. Gửi tin nhắn chat
     socket.on('CHAT_MESSAGE', (data: { roomCode: string; playerId: string; text: string }) => {
       const room = roomManager.getRoom(data.roomCode);
@@ -410,6 +488,99 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         room.addChat(data.playerId, data.text.trim());
         io.to(data.roomCode).emit('CHAT_HISTORY', room.chatMessages);
       }
+    });
+
+    // 9.1. Tham gia phòng Voice Chat (Mặc định hỗ trợ chế độ Nghe cho người không có mic)
+    socket.on(
+      'VOICE_JOIN',
+      (
+        data: {
+          roomCode: string;
+          playerId: string;
+          playerName: string;
+          playerAvatar: string;
+          isMuted?: boolean;
+          hasMic?: boolean;
+        },
+        callback
+      ) => {
+        try {
+          const room = roomManager.getRoom(data.roomCode);
+          if (!room) {
+            callback?.({ success: false, message: 'Phòng không tồn tại' });
+            return;
+          }
+
+          const participant = room.joinVoice(
+            socket.id,
+            data.playerId,
+            data.playerName,
+            data.playerAvatar,
+            !!data.isMuted,
+            !!data.hasMic
+          );
+
+          socket.join(`voice_${room.code}`);
+
+          // Trả về danh sách tất cả người tham gia hiện tại cho người mới vào
+          const allParticipants = room.getVoiceParticipants();
+          callback?.({ success: true, participants: allParticipants });
+
+          // Báo cho các người khác trong phòng voice
+          socket.to(`voice_${room.code}`).emit('VOICE_USER_JOINED', participant);
+          broadcastRoomUpdate(room.code);
+        } catch (err: any) {
+          callback?.({ success: false, message: err.message || 'Không thể tham gia voice' });
+        }
+      }
+    );
+
+    // 9.2. WebRTC Signaling (Offer / Answer / ICE Candidate)
+    socket.on(
+      'VOICE_SIGNAL',
+      (data: {
+        roomCode: string;
+        targetSocketId: string;
+        signal: any;
+      }) => {
+        if (!data.targetSocketId || !data.signal) return;
+        io.to(data.targetSocketId).emit('VOICE_SIGNAL', {
+          senderSocketId: socket.id,
+          signal: data.signal,
+          roomCode: data.roomCode,
+        });
+      }
+    );
+
+    // 9.3. Cập nhật trạng thái Mic / Speaking / hasMic
+    socket.on(
+      'VOICE_STATUS_UPDATE',
+      (data: { roomCode: string; isMuted?: boolean; isSpeaking?: boolean; hasMic?: boolean }) => {
+        const room = roomManager.getRoom(data.roomCode);
+        if (room) {
+          const updated = room.updateVoiceStatus(socket.id, data.isMuted, data.isSpeaking, data.hasMic);
+          if (updated) {
+            io.to(`voice_${room.code}`).emit('VOICE_STATUS_UPDATE', updated);
+          }
+        }
+      }
+    );
+
+    // 9.4. Rời phòng Voice Chat
+    socket.on('VOICE_LEAVE', (data: { roomCode: string }, callback) => {
+      const room = roomManager.getRoom(data.roomCode);
+      if (room) {
+        const left = room.leaveVoice(socket.id);
+        socket.leave(`voice_${room.code}`);
+        if (left) {
+          io.to(`voice_${room.code}`).emit('VOICE_USER_LEFT', {
+            socketId: socket.id,
+            playerId: left.playerId,
+          });
+          broadcastRoomUpdate(room.code);
+        }
+      }
+      callback?.({ success: true });
     });
 
     // 10. Lấy danh sách phòng sảnh
@@ -425,6 +596,13 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       for (const r of rooms) {
         const room = roomManager.getRoom(r.code);
         if (room) {
+          const voiceLeft = room.leaveVoice(socket.id);
+          if (voiceLeft) {
+            io.to(`voice_${room.code}`).emit('VOICE_USER_LEFT', {
+              socketId: socket.id,
+              playerId: voiceLeft.playerId,
+            });
+          }
           const p = room.players.find((player) => player.socketId === socket.id);
           if (p) {
             foundRoomCode = room.code;

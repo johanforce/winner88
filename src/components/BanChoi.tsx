@@ -10,6 +10,10 @@ import {
   Flame,
   AlertCircle,
   Crown,
+  Mic,
+  MicOff,
+  Radio,
+  Headphones,
 } from 'lucide-react';
 import {
   RoomPublicState,
@@ -23,6 +27,7 @@ import { CardView } from './CardView';
 import { KhungChat } from './KhungChat';
 import { RuleGuideModal } from './RuleGuideModal';
 import { KetQuaVan } from './KetQuaVan';
+import { useVoiceChat } from '../context/VoiceChatContext';
 
 interface BanChoiProps {
   roomState: RoomPublicState;
@@ -45,6 +50,8 @@ export const BanChoi: React.FC<BanChoiProps> = ({
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [hasDismissedBaoSam, setHasDismissedBaoSam] = useState(false);
+
+  const { participants: voiceParticipants, speakingMap } = useVoiceChat();
 
   // Reset trạng thái ẩn dialog Báo Sâm khi ván mới bắt đầu hoặc hết giai đoạn Báo Sâm
   useEffect(() => {
@@ -182,6 +189,8 @@ export const BanChoi: React.FC<BanChoiProps> = ({
   const renderOpponentSeat = (player: PlayerPublicInfo | null, positionClass: string) => {
     if (!player) return null;
     const isTheirTurn = player.isCurrentTurn;
+    const voiceUser = voiceParticipants.find((vp) => vp.playerId === player.id);
+    const isSpeaking = speakingMap[player.id] || voiceUser?.isSpeaking;
 
     return (
       <div className={`absolute z-10 flex flex-col items-center ${positionClass}`}>
@@ -191,15 +200,56 @@ export const BanChoi: React.FC<BanChoiProps> = ({
             <div className="absolute -inset-2 rounded-full border-2 border-amber-400 animate-ping opacity-75" />
           )}
 
+          {/* Voice Speaking Glowing Ring */}
+          {isSpeaking && (
+            <div className="absolute -inset-1.5 rounded-full border-2 border-emerald-400 bg-emerald-500/20 animate-pulse ring-4 ring-emerald-400/40" />
+          )}
+
           <div
             className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center text-2xl sm:text-3xl border-2 transition-all shadow-lg ${
-              isTheirTurn
+              isSpeaking
+                ? 'bg-emerald-950/80 border-emerald-400 ring-2 ring-emerald-400 scale-105'
+                : isTheirTurn
                 ? 'bg-amber-950 border-amber-400 ring-2 ring-amber-400/50 scale-105'
                 : 'bg-slate-900 border-slate-700'
             }`}
           >
             {player.avatar}
           </div>
+
+          {/* Voice indicator badge */}
+          {voiceUser && (
+            <div
+              className={`absolute -bottom-1 -left-1 p-0.5 rounded-full border shadow z-20 ${
+                voiceUser.hasMic === false
+                  ? 'bg-sky-950 border-sky-700 text-sky-400'
+                  : voiceUser.isMuted
+                  ? 'bg-slate-900 border-slate-700 text-slate-400'
+                  : isSpeaking
+                  ? 'bg-emerald-500 border-emerald-300 text-slate-950 animate-bounce'
+                  : 'bg-emerald-950 border-emerald-700 text-emerald-400'
+              }`}
+              title={
+                voiceUser.hasMic === false
+                  ? 'Đang nghe phòng 🎧'
+                  : voiceUser.isMuted
+                  ? 'Đã tắt mic'
+                  : isSpeaking
+                  ? 'Đang nói...'
+                  : 'Đang bật mic'
+              }
+            >
+              {voiceUser.hasMic === false ? (
+                <Headphones className="w-2.5 h-2.5" />
+              ) : voiceUser.isMuted ? (
+                <MicOff className="w-2.5 h-2.5" />
+              ) : isSpeaking ? (
+                <Radio className="w-2.5 h-2.5" />
+              ) : (
+                <Mic className="w-2.5 h-2.5" />
+              )}
+            </div>
+          )}
 
           {/* Host crown badge */}
           {player.isHost && (
@@ -218,8 +268,11 @@ export const BanChoi: React.FC<BanChoiProps> = ({
 
         {/* Player Name and status */}
         <div className="mt-2 text-center">
-          <div className="text-xs font-bold text-white max-w-[90px] truncate">
-            {player.name}
+          <div className="text-xs font-bold text-white max-w-[90px] truncate flex items-center justify-center gap-1">
+            <span>{player.name}</span>
+            {isSpeaking && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping inline-block" />
+            )}
           </div>
           <div className="text-[10px] text-amber-300 font-extrabold">
             💰 {player.score !== undefined ? player.score.toLocaleString('vi-VN') : 0} xu
