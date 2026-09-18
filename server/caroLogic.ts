@@ -1,6 +1,6 @@
 import { CaroPiece, CaroMove } from './types';
 
-export const CARO_BOARD_SIZE = 15;
+export const CARO_BOARD_SIZE = 20;
 
 export function createEmptyCaroBoard(): (CaroPiece | null)[][] {
   const board: (CaroPiece | null)[][] = [];
@@ -16,6 +16,14 @@ export function createEmptyCaroBoard(): (CaroPiece | null)[][] {
 
 export function isInsideBoard(x: number, y: number): boolean {
   return x >= 0 && x < CARO_BOARD_SIZE && y >= 0 && y < CARO_BOARD_SIZE;
+}
+
+/**
+ * Kiểm tra ô có thể đánh được không:
+ * Bàn cờ 20x20 nhưng KHÔNG ĐƯỢC ĐÁNH VÀO VIỀN NGOÀI (x=0, x=19, y=0, y=19)
+ */
+export function isPlayableCaroCell(x: number, y: number): boolean {
+  return x > 0 && x < CARO_BOARD_SIZE - 1 && y > 0 && y < CARO_BOARD_SIZE - 1;
 }
 
 /**
@@ -76,11 +84,11 @@ export function checkCaroWin(
 }
 
 /**
- * Kiểm tra bàn cờ đã đầy chưa (nếu đầy mà không ai ăn 5 thì hòa)
+ * Kiểm tra các ô chơi hợp lệ trên bàn cờ đã đầy chưa (trừ viền ngoài)
  */
 export function isCaroBoardFull(board: (CaroPiece | null)[][]): boolean {
-  for (let y = 0; y < CARO_BOARD_SIZE; y++) {
-    for (let x = 0; x < CARO_BOARD_SIZE; x++) {
+  for (let y = 1; y < CARO_BOARD_SIZE - 1; y++) {
+    for (let x = 1; x < CARO_BOARD_SIZE - 1; x++) {
       if (board[y][x] === null) {
         return false;
       }

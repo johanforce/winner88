@@ -6,8 +6,8 @@ export type GameRule = 'TIEN_LEN_MIEN_NAM' | 'SAM_LOC' | 'CO_TUONG' | 'CARO';
 export type CaroPiece = 'X' | 'O';
 
 export interface CaroMove {
-  x: number; // 0..14
-  y: number; // 0..14
+  x: number; // 0..19 (0 và 19 là viền ngoài)
+  y: number; // 0..19 (0 và 19 là viền ngoài)
   piece: CaroPiece;
   playerId: string;
   moveNumber: number;
@@ -15,13 +15,13 @@ export interface CaroMove {
 }
 
 export interface CaroState {
-  board: (CaroPiece | null)[][]; // 15x15 grid
+  board: (CaroPiece | null)[][]; // 20x20 grid
   currentTurn: CaroPiece; // 'X' đi trước
   xPlayerId: string | null;
   oPlayerId: string | null;
   spectatorIds: string[];
-  xTimeRemaining: number; // 300s (5 phút)
-  oTimeRemaining: number; // 300s (5 phút)
+  xTimeRemaining: number; // 300s (5 phút tổng)
+  oTimeRemaining: number; // 300s (5 phút tổng)
   initialTime: number; // 300
   lastMove: CaroMove | null;
   moveHistory: CaroMove[];

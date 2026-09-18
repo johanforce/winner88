@@ -316,27 +316,40 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
               </div>
             </>
           ) : activeTab === 'CARO' ? (
-            /* TAB CARO: LUẬT CỜ CARO (ĂN 5 CHẶN 2 ĐẦU VẪN THẮNG, 5 PHÚT BLITZ) */
+            /* TAB CARO: LUẬT CỜ CARO (20x20 GIAO ĐIỂM, 5 PHÚT TỔNG, ĂN 5 CHẶN 2 ĐẦU WIN) */
             <>
               <div className="bg-cyan-950/40 border border-cyan-800/40 p-3.5 rounded-xl">
                 <h3 className="font-bold text-cyan-300 mb-1 flex items-center gap-1.5">
-                  <Award className="w-4 h-4 text-cyan-400" /> Luật Ăn 5 Chặn 2 Đầu Vẫn Thắng
+                  <Award className="w-4 h-4 text-cyan-400" /> Bàn Cờ 20x20 &amp; Vị Trí Quân Cờ
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  &bull; <strong>Quy tắc chiến thắng đặc biệt:</strong> Người chơi tạo thành một chuỗi gồm đúng hoặc nhiều hơn <strong>5 quân cờ liên tiếp</strong> (theo chiều ngang, dọc hoặc chéo) sẽ <strong>GIÀNH CHIẾN THẮNG NGAY LẬP TỨC</strong>.<br />
-                  &bull; <strong>Chặn 2 đầu:</strong> Kể cả khi chuỗi 5 quân bị đối phương chặn ở một đầu hay <strong>bị chặn ở CẢ HAI ĐẦU</strong> thì người tạo đủ 5 quân <strong>VẪN ĐƯỢC TÍNH LÀ THẮNG</strong> (đúng theo luật cờ quy định).<br />
-                  &bull; <strong>Bàn cờ thi đấu:</strong> Kích thước chuẩn <strong>15x15</strong> ô kẻ caro, có các điểm hoa tiêu (star points) tiêu chuẩn.
+                  &bull; <strong>Vị trí đặt quân:</strong> Quân cờ được đặt trực tiếp trên <strong>các giao điểm của các đường thẳng</strong>, các ô tạo bởi các đường kẻ là <strong>hình vuông</strong> chuẩn.<br />
+                  &bull; <strong>Kích thước bàn cờ:</strong> Lưới gồm <strong>20x20</strong> giao điểm (tương ứng các cột A - T và các hàng 1 - 20).<br />
+                  &bull; <strong>Quy định viền ngoài:</strong> <strong>KHÔNG ĐƯỢC ĐÁNH VÀO VIỀN NGOÀI</strong> bàn cờ (hàng ngoài cùng 1, 20 và cột ngoài cùng A, T là đường biên giới hạn).<br />
+                  &bull; <strong>Không có tính năng xin đi lại:</strong> Mỗi nước cờ đã đặt xuống là quyết định cuối cùng, không thể rút lại.
+                </p>
+              </div>
+
+              <div className="bg-emerald-950/40 border border-emerald-800/40 p-3.5 rounded-xl">
+                <h3 className="font-bold text-emerald-300 mb-1 flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> Luật Ăn 5 Chặn 2 Đầu Vẫn Thắng
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  &bull; <strong>Điều kiện chiến thắng:</strong> Người chơi tạo thành một chuỗi gồm từ <strong>5 quân cờ liên tiếp</strong> trở lên (theo chiều ngang, dọc hoặc 2 đường chéo) sẽ <strong>GIÀNH CHIẾN THẮNG NGAY LẬP TỨC</strong>.<br />
+                  &bull; <strong>Chặn 2 đầu:</strong> Kể cả khi chuỗi 5 quân bị đối phương chặn ở một đầu hay <strong>bị chặn ở CẢ HAI ĐẦU</strong> thì người tạo đủ 5 quân <strong>VẪN ĐƯỢC TÍNH LÀ THẮNG</strong>!
                 </p>
               </div>
 
               <div className="bg-amber-950/40 border border-amber-800/40 p-3.5 rounded-xl space-y-2">
                 <h3 className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-amber-400" /> Thời Gian Thi Đấu: 5 Phút / Bên (Blitz)
+                  <Clock className="w-4 h-4 text-amber-400" /> Tổng Thời Gian Thi Đấu: 5 Phút / Người Chơi
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  &bull; <strong>Đồng hồ 5 phút:</strong> Mỗi kỳ thủ bắt đầu ván cờ với đúng <strong>5 phút (300 giây)</strong> tổng quỹ thời gian suy nghĩ.<br />
-                  &bull; <strong>Xử thua hết giờ (Timeout):</strong> Khi đồng hồ của bạn đếm ngược về <strong>00:00</strong>, hệ thống sẽ xử bạn <strong>THUA CUỘC NGAY LẬP TỨC</strong>. Đối thủ được công nhận chiến thắng (+100 xu).<br />
-                  &bull; <strong>Đồng hồ cảnh báo:</strong> Khi thời gian còn dưới 30 giây, đồng hồ sẽ nhấp nháy đỏ để cảnh báo người chơi.
+                  &bull; <strong>Không giới hạn thời gian từng nước đi:</strong> Bạn có thể suy nghĩ nhanh hay chậm tùy ý trong từng nước cờ.<br />
+                  &bull; <strong>Tổng quỹ thời gian 5 phút:</strong> Mỗi người chơi có <strong>tổng thời gian là 5 phút (300 giây)</strong> cho toàn bộ ván đấu. Đồng hồ của bạn chỉ đếm ngược khi đang tới lượt của bạn.<br />
+                  &bull; <strong>Quy tắc phân định thắng thua:</strong><br />
+                  &nbsp;&nbsp;+ Nếu thắng (ăn 5) trong vòng 5 phút: <strong>Tính THẮNG ngay lập tức</strong>.<br />
+                  &nbsp;&nbsp;+ Nếu trong 5 phút mà chưa ai thắng: <strong>Ai hết 5 phút trước sẽ là NGƯỜI THUA</strong>, người còn thời gian sẽ giành chiến thắng (+100 xu).
                 </p>
               </div>
 
@@ -347,9 +360,10 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                 <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
                   <li><strong>Quân X (Ghế 1):</strong> Luôn là bên được quyền đánh trước nước đầu tiên.</li>
                   <li><strong>Quân O (Ghế 2):</strong> Đánh sau quân X.</li>
+                  <li><strong>Không có xin đi lại:</strong> Đảm bảo tính công bằng và nghiêm túc trong thi đấu.</li>
                   <li><strong>Xin hòa:</strong> Bạn có thể gửi đề nghị hòa cờ bất kỳ lúc nào. Nếu đối phương bấm Đồng ý thì ván cờ hòa.</li>
-                  <li><strong>Đầu hàng (Xin thua):</strong> Chủ động nhận thua nếu thấy thế cờ bất lợi.</li>
-                  <li><strong>Hiển thị số nước đi:</strong> Bấm nút <strong>123</strong> trên góc phải bàn cờ để xem số thứ tự từng nước cờ đã đánh.</li>
+                  <li><strong>Đầu hàng (Xin thua):</strong> Chủ động nhận thua nếu thấy đối thủ đang nắm thế cờ áp đảo.</li>
+                  <li><strong>Hiển thị số nước đi:</strong> Bấm nút <strong>123</strong> trên góc phải để xem số thứ tự từng nước cờ.</li>
                   <li><strong>Khán giả theo dõi:</strong> Bạn bè có thể vào phòng xem trực tiếp và đàm thoại Voice Chat thời gian thực.</li>
                 </ul>
               </div>

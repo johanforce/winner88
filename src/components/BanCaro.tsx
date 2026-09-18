@@ -30,7 +30,7 @@ import { socket } from '../socket';
 import { KhungChat } from './KhungChat';
 import { RuleGuideModal } from './RuleGuideModal';
 import { useVoiceChat } from '../context/VoiceChatContext';
-import { BOARD_SIZE, caroSound } from '../utils/caroLogic';
+import { BOARD_SIZE, isBorderCell, isPlayableCell, caroSound } from '../utils/caroLogic';
 
 interface BanCaroProps {
   roomState: RoomPublicState;
@@ -111,7 +111,14 @@ export const BanCaro: React.FC<BanCaroProps> = ({
   // Click to place piece
   const handleCellClick = (x: number, y: number) => {
     if (!caro || caro.winnerPiece || isSpectator || !isMyTurn) return;
-    if (caro.board[y][x] !== null) return;
+
+    // Luật cờ Caro 20x20: Không được đánh vào viền ngoài bàn cờ
+    if (isBorderCell(x, y)) {
+      setActionError('Không được đánh vào viền ngoài bàn cờ (hàng/cột ngoài cùng)!');
+      return;
+    }
+
+    if (caro.board[y]?.[x] !== null) return;
 
     setActionError(null);
     socket.emit(
@@ -188,14 +195,17 @@ export const BanCaro: React.FC<BanCaroProps> = ({
     return set;
   }, [caro?.winningLine]);
 
-  // Star points on 15x15 board: (3,3), (11,3), (7,7), (3,11), (11,11)
+  // Star points trên bàn cờ 20x20 tại các giao điểm: (4,4), (15,4), (4,15), (15,15), (9,9), (10,10), (9,10), (10,9)
   const isStarPoint = (x: number, y: number) => {
     return (
-      (x === 3 && y === 3) ||
-      (x === 11 && y === 3) ||
-      (x === 7 && y === 7) ||
-      (x === 3 && y === 11) ||
-      (x === 11 && y === 11)
+      (x === 4 && y === 4) ||
+      (x === 15 && y === 4) ||
+      (x === 4 && y === 15) ||
+      (x === 15 && y === 15) ||
+      (x === 9 && y === 9) ||
+      (x === 10 && y === 10) ||
+      (x === 9 && y === 10) ||
+      (x === 10 && y === 9)
     );
   };
 
@@ -431,8 +441,8 @@ export const BanCaro: React.FC<BanCaroProps> = ({
             </div>
           </div>
 
-          {/* TURN PROMPT INDICATOR */}
-          <div className="w-full mb-2 flex items-center justify-between px-2 text-xs">
+          {/* TURN & RULES BANNER */}
+          <div className="w-full mb-2 flex flex-wrap items-center justify-between gap-1.5 px-2 text-xs">
             <div className="flex items-center gap-1.5">
               {!caro?.winnerPiece ? (
                 <>
@@ -461,127 +471,211 @@ export const BanCaro: React.FC<BanCaroProps> = ({
               )}
             </div>
 
-            <span className="text-[11px] text-slate-400 font-mono">
-              Tổng số nước: <strong>{caro?.moveHistory.length || 0}</strong>
-            </span>
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+              <span className="hidden sm:inline bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-md text-amber-300/90">
+                5:00 Tổng thời gian
+              </span>
+              <span>
+                Nước đi: <strong className="text-white">{caro?.moveHistory.length || 0}</strong>
+              </span>
+            </div>
           </div>
 
-          {/* CARO 15x15 WOODEN BOARD */}
-          <div className="relative p-2 sm:p-3.5 rounded-2xl bg-amber-900/40 border-4 border-amber-950 shadow-2xl overflow-hidden">
-            {/* Board Background Styling */}
+          {/* BOARD CONTAINER: 20x20 INTERSECTIONS */}
+          <div className="relative p-2 sm:p-3 rounded-2xl bg-amber-950/80 border-4 border-amber-900 shadow-2xl overflow-hidden flex flex-col items-center">
+            {/* Top Coordinate Labels (A - T) */}
             <div
-              className="relative rounded-xl border border-amber-900/60 shadow-inner grid"
+              className="grid w-full mb-1 text-[8px] sm:text-[10px] font-mono font-bold text-amber-800/90 text-center select-none"
               style={{
-                backgroundColor: '#dcab6b',
-                backgroundImage:
-                  'radial-gradient(#c29355 15%, transparent 16%), radial-gradient(#d6a260 15%, transparent 16%)',
-                backgroundSize: '24px 24px',
                 gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))`,
-                aspectRatio: '1 / 1',
-                width: 'min(92vw, 560px)',
-                maxWidth: '560px',
+                width: 'min(92vw, 580px)',
+                maxWidth: '580px',
               }}
             >
-              {Array.from({ length: BOARD_SIZE }).map((_, y) =>
-                Array.from({ length: BOARD_SIZE }).map((__, x) => {
-                  const piece = caro?.board[y]?.[x] ?? null;
-                  const isHovered = hoveredCell?.x === x && hoveredCell?.y === y;
-                  const isLastMove = caro?.lastMove?.x === x && caro?.lastMove?.y === y;
-                  const isWinningCell = winningCellSet.has(`${x},${y}`);
-                  const moveNumber = moveNumberMap.get(`${x},${y}`);
-                  const star = isStarPoint(x, y);
+              {Array.from({ length: BOARD_SIZE }).map((_, i) => (
+                <span
+                  key={`col-${i}`}
+                  className={i === 0 || i === BOARD_SIZE - 1 ? 'text-amber-950/60 font-normal' : ''}
+                  title={i === 0 || i === BOARD_SIZE - 1 ? 'Viền ngoài' : undefined}
+                >
+                  {String.fromCharCode(65 + i)}
+                </span>
+              ))}
+            </div>
 
-                  return (
-                    <div
-                      key={`${x}-${y}`}
-                      onClick={() => handleCellClick(x, y)}
-                      onMouseEnter={() => setHoveredCell({ x, y })}
-                      onMouseLeave={() => setHoveredCell(null)}
-                      className={`relative flex items-center justify-center cursor-pointer transition-colors ${
-                        !piece && isMyTurn && !caro?.winnerPiece ? 'hover:bg-amber-800/20' : ''
-                      }`}
-                    >
-                      {/* Grid Lines */}
+            {/* Board Canvas with Intersections */}
+            <div className="flex items-center">
+              {/* Left Row Labels (1 - 20) */}
+              <div
+                className="grid h-full mr-1 text-[8px] sm:text-[10px] font-mono font-bold text-amber-800/90 text-right pr-0.5 select-none"
+                style={{
+                  gridTemplateRows: `repeat(${BOARD_SIZE}, minmax(0, 1fr))`,
+                  height: 'min(92vw, 580px)',
+                  maxHeight: '580px',
+                }}
+              >
+                {Array.from({ length: BOARD_SIZE }).map((_, i) => (
+                  <span
+                    key={`row-${i}`}
+                    className={`flex items-center justify-end leading-none ${
+                      i === 0 || i === BOARD_SIZE - 1 ? 'text-amber-950/60 font-normal' : ''
+                    }`}
+                    title={i === 0 || i === BOARD_SIZE - 1 ? 'Viền ngoài' : undefined}
+                  >
+                    {i + 1}
+                  </span>
+                ))}
+              </div>
+
+              {/* 20x20 Grid of Intersections */}
+              <div
+                className="relative rounded-lg border-2 border-amber-950/90 shadow-inner grid select-none"
+                style={{
+                  backgroundColor: '#dcab6b',
+                  backgroundImage:
+                    'radial-gradient(#c29355 12%, transparent 13%), radial-gradient(#d6a260 12%, transparent 13%)',
+                  backgroundSize: '20px 20px',
+                  gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))`,
+                  gridTemplateRows: `repeat(${BOARD_SIZE}, minmax(0, 1fr))`,
+                  aspectRatio: '1 / 1',
+                  width: 'min(92vw, 580px)',
+                  maxWidth: '580px',
+                }}
+              >
+                {Array.from({ length: BOARD_SIZE }).map((_, y) =>
+                  Array.from({ length: BOARD_SIZE }).map((__, x) => {
+                    const piece = caro?.board[y]?.[x] ?? null;
+                    const isHovered = hoveredCell?.x === x && hoveredCell?.y === y;
+                    const isLastMove = caro?.lastMove?.x === x && caro?.lastMove?.y === y;
+                    const isWinningCell = winningCellSet.has(`${x},${y}`);
+                    const moveNumber = moveNumberMap.get(`${x},${y}`);
+                    const star = isStarPoint(x, y);
+                    const isBorder = isBorderCell(x, y);
+
+                    return (
                       <div
-                        className="absolute inset-0 pointer-events-none"
-                        style={{
-                          borderRight: x < BOARD_SIZE - 1 ? '1px solid rgba(80, 45, 15, 0.45)' : 'none',
-                          borderBottom: y < BOARD_SIZE - 1 ? '1px solid rgba(80, 45, 15, 0.45)' : 'none',
-                        }}
-                      />
+                        key={`${x}-${y}`}
+                        onClick={() => handleCellClick(x, y)}
+                        onMouseEnter={() => setHoveredCell({ x, y })}
+                        onMouseLeave={() => setHoveredCell(null)}
+                        title={
+                          isBorder
+                            ? 'Viền ngoài bàn cờ (không được đánh)'
+                            : `Tọa độ: ${String.fromCharCode(65 + x)}${y + 1}`
+                        }
+                        className={`relative flex items-center justify-center transition-colors ${
+                          isBorder
+                            ? 'cursor-not-allowed bg-amber-950/10'
+                            : !piece && isMyTurn && !caro?.winnerPiece
+                            ? 'cursor-pointer hover:bg-amber-800/25'
+                            : !piece
+                            ? 'cursor-pointer'
+                            : 'cursor-default'
+                        }`}
+                      >
+                        {/* Horizontal Line passing through center (intersection) */}
+                        <div
+                          className="absolute pointer-events-none"
+                          style={{
+                            top: '50%',
+                            left: x === 0 ? '50%' : '0',
+                            right: x === BOARD_SIZE - 1 ? '50%' : '0',
+                            height: y === 0 || y === BOARD_SIZE - 1 ? '2.5px' : '1px',
+                            backgroundColor: y === 0 || y === BOARD_SIZE - 1 ? '#3a1e08' : '#683d16',
+                            transform: 'translateY(-50%)',
+                          }}
+                        />
 
-                      {/* Star Points */}
-                      {star && !piece && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-amber-950/70 pointer-events-none" />
-                      )}
+                        {/* Vertical Line passing through center (intersection) */}
+                        <div
+                          className="absolute pointer-events-none"
+                          style={{
+                            left: '50%',
+                            top: y === 0 ? '50%' : '0',
+                            bottom: y === BOARD_SIZE - 1 ? '50%' : '0',
+                            width: x === 0 || x === BOARD_SIZE - 1 ? '2.5px' : '1px',
+                            backgroundColor: x === 0 || x === BOARD_SIZE - 1 ? '#3a1e08' : '#683d16',
+                            transform: 'translateX(-50%)',
+                          }}
+                        />
 
-                      {/* Winning cell glowing highlight */}
-                      {isWinningCell && (
-                        <div className="absolute inset-0.5 rounded-full bg-amber-400/40 ring-4 ring-amber-400 animate-pulse pointer-events-none z-10" />
-                      )}
+                        {/* Star Points (Hoa tiêu tại giao điểm) */}
+                        {star && !piece && (
+                          <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#3a1e08] pointer-events-none z-0 shadow-sm" />
+                        )}
 
-                      {/* Last Move Indicator Ring */}
-                      {isLastMove && (
-                        <div className="absolute inset-0 rounded-full border-2 border-emerald-400 ring-2 ring-emerald-400/50 animate-ping pointer-events-none z-10" />
-                      )}
+                        {/* Winning cell glowing highlight */}
+                        {isWinningCell && (
+                          <div className="absolute inset-0 rounded-full bg-amber-400/40 ring-4 ring-amber-400 animate-pulse pointer-events-none z-20" />
+                        )}
 
-                      {/* Placed Piece */}
-                      {piece === 'X' && (
-                        <div className="relative w-[84%] h-[84%] flex items-center justify-center z-10">
-                          <span
-                            className="font-black text-rose-600 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] select-none leading-none"
-                            style={{ fontSize: 'min(5.4vw, 32px)' }}
-                          >
-                            ✕
-                          </span>
-                          {showMoveNumbers && moveNumber && (
-                            <span className="absolute -bottom-1 -right-1 text-[8px] sm:text-[9px] font-mono font-black text-white bg-rose-900/90 rounded-full px-1 py-0 shadow">
-                              {moveNumber}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                        {/* Last Move Indicator Ring */}
+                        {isLastMove && (
+                          <div className="absolute inset-0 rounded-full border-2 border-emerald-400 ring-2 ring-emerald-400/50 animate-ping pointer-events-none z-20" />
+                        )}
 
-                      {piece === 'O' && (
-                        <div className="relative w-[84%] h-[84%] flex items-center justify-center z-10">
-                          <span
-                            className="font-black text-blue-700 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] select-none leading-none"
-                            style={{ fontSize: 'min(5.6vw, 34px)' }}
-                          >
-                            ◯
-                          </span>
-                          {showMoveNumbers && moveNumber && (
-                            <span className="absolute -bottom-1 -right-1 text-[8px] sm:text-[9px] font-mono font-black text-white bg-blue-900/90 rounded-full px-1 py-0 shadow">
-                              {moveNumber}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Hover ghost preview */}
-                      {!piece && isHovered && isMyTurn && !caro?.winnerPiece && myPiece && (
-                        <div className="opacity-40 pointer-events-none z-10">
-                          {myPiece === 'X' ? (
-                            <span
-                              className="font-black text-rose-700 select-none leading-none"
-                              style={{ fontSize: 'min(5.4vw, 32px)' }}
-                            >
+                        {/* Placed Piece: X (Crimson 3D Stone on Intersection) */}
+                        {piece === 'X' && (
+                          <div className="relative w-[86%] h-[86%] rounded-full bg-gradient-to-br from-rose-500 via-red-600 to-red-800 shadow-[0_2px_4px_rgba(0,0,0,0.6)] border border-rose-300/60 flex items-center justify-center z-10">
+                            <span className="font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)] select-none text-[11px] sm:text-sm md:text-base leading-none">
                               ✕
                             </span>
-                          ) : (
-                            <span
-                              className="font-black text-blue-800 select-none leading-none"
-                              style={{ fontSize: 'min(5.6vw, 34px)' }}
-                            >
+                            {showMoveNumbers && moveNumber && (
+                              <span className="absolute -bottom-1 -right-1 text-[7px] sm:text-[8px] font-mono font-black text-white bg-slate-950/90 rounded-full px-1 shadow border border-slate-700">
+                                {moveNumber}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Placed Piece: O (Midnight Blue 3D Stone on Intersection) */}
+                        {piece === 'O' && (
+                          <div className="relative w-[86%] h-[86%] rounded-full bg-gradient-to-br from-cyan-400 via-sky-600 to-blue-800 shadow-[0_2px_4px_rgba(0,0,0,0.6)] border border-cyan-200/60 flex items-center justify-center z-10">
+                            <span className="font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)] select-none text-[12px] sm:text-base md:text-lg leading-none">
                               ◯
                             </span>
+                            {showMoveNumbers && moveNumber && (
+                              <span className="absolute -bottom-1 -right-1 text-[7px] sm:text-[8px] font-mono font-black text-white bg-slate-950/90 rounded-full px-1 shadow border border-slate-700">
+                                {moveNumber}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Hover ghost preview on playable intersection */}
+                        {!piece &&
+                          !isBorder &&
+                          isHovered &&
+                          isMyTurn &&
+                          !caro?.winnerPiece &&
+                          myPiece && (
+                            <div className="w-[80%] h-[80%] rounded-full opacity-50 pointer-events-none z-10 flex items-center justify-center shadow">
+                              {myPiece === 'X' ? (
+                                <div className="w-full h-full rounded-full bg-rose-500/70 border border-rose-300 flex items-center justify-center text-white font-black text-[10px] sm:text-xs">
+                                  ✕
+                                </div>
+                              ) : (
+                                <div className="w-full h-full rounded-full bg-cyan-500/70 border border-cyan-300 flex items-center justify-center text-white font-black text-[10px] sm:text-xs">
+                                  ◯
+                                </div>
+                              )}
+                            </div>
                           )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Note banner under board */}
+            <div className="w-full mt-2 pt-1 border-t border-amber-900/60 flex flex-wrap items-center justify-between text-[10px] sm:text-[11px] text-amber-200/80 px-1 font-medium">
+              <span>
+                • Quân cờ nằm trên <strong>giao điểm</strong> đường thẳng • Các ô là <strong>hình vuông</strong>
+              </span>
+              <span className="text-amber-400 font-semibold">
+                • Viền ngoài bàn cờ: <strong>Không được đánh</strong>
+              </span>
             </div>
           </div>
 

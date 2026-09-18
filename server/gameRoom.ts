@@ -40,6 +40,7 @@ import {
 import {
   createEmptyCaroBoard,
   isInsideBoard,
+  isPlayableCaroCell,
   checkCaroWin,
   isCaroBoardFull,
 } from './caroLogic';
@@ -595,7 +596,7 @@ export class GameRoom {
       });
 
       this.addSystemChat(
-        `⚡ TRẬN ĐẤU CỜ CARO (5 PHÚT/BÊN) CHÍNH THỨC BẮT ĐẦU! Quân X (${xPlayer.name}) vs Quân O (${oPlayer.name}). Luật: Ăn 5 chặn 2 đầu vẫn THẮNG!`
+        `⚡ TRẬN ĐẤU CỜ CARO (20x20 - 5 PHÚT/BÊN) CHÍNH THỨC BẮT ĐẦU! Quân X (${xPlayer.name}) vs Quân O (${oPlayer.name}). Bàn cờ 20x20 trên các giao điểm (không đánh vào viền ngoài). Tổng thời gian 5 phút/kỳ thủ, ăn 5 chặn 2 đầu vẫn THẮNG!`
       );
 
       this.startCaroTimer();
@@ -1664,6 +1665,10 @@ export class GameRoom {
 
     if (!isInsideBoard(x, y)) {
       return { success: false, message: 'Nước đi ra ngoài bàn cờ' };
+    }
+
+    if (!isPlayableCaroCell(x, y)) {
+      return { success: false, message: 'Không được đánh vào viền ngoài bàn cờ' };
     }
 
     if (this.caroState.board[y][x] !== null) {

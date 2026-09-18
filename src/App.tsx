@@ -178,6 +178,19 @@ export default function App() {
   // Handler: Create room
   const handleCreateRoom = (rule: GameRule, xiangqiTimeMode?: XiangqiTimeMode) => {
     setGlobalError(null);
+    if (!socket.connected) {
+      setGlobalError('Đang thiết lập kết nối tới máy chủ, vui lòng đợi giây lát rồi bấm lại...');
+      socket.connect();
+      return;
+    }
+
+    let responded = false;
+    const timeout = setTimeout(() => {
+      if (!responded) {
+        setGlobalError('Máy chủ phản hồi chậm hoặc đang bận, vui lòng thử lại.');
+      }
+    }, 7000);
+
     socket.emit(
       'ROOM_CREATE',
       {
@@ -190,8 +203,10 @@ export default function App() {
         xiangqiTimeMode,
       },
       (res: { success: boolean; roomCode?: string; message?: string }) => {
-        if (!res.success) {
-          setGlobalError(res.message || 'Không thể tạo phòng');
+        responded = true;
+        clearTimeout(timeout);
+        if (!res?.success) {
+          setGlobalError(res?.message || 'Không thể tạo phòng');
         } else if (res.roomCode) {
           saveLastRoomCode(res.roomCode);
           setCurrentScreen('ROOM');
@@ -203,6 +218,19 @@ export default function App() {
   // Handler: Join room by code
   const handleJoinRoom = (code: string) => {
     setGlobalError(null);
+    if (!socket.connected) {
+      setGlobalError('Đang thiết lập kết nối tới máy chủ, vui lòng đợi giây lát rồi bấm lại...');
+      socket.connect();
+      return;
+    }
+
+    let responded = false;
+    const timeout = setTimeout(() => {
+      if (!responded) {
+        setGlobalError('Không nhận được phản hồi từ phòng chơi. Vui lòng kiểm tra mã phòng.');
+      }
+    }, 7000);
+
     socket.emit(
       'ROOM_JOIN',
       {
@@ -214,8 +242,10 @@ export default function App() {
         initialScore: profile.score,
       },
       (res: { success: boolean; roomCode?: string; message?: string }) => {
-        if (!res.success) {
-          setGlobalError(res.message || 'Không thể vào phòng');
+        responded = true;
+        clearTimeout(timeout);
+        if (!res?.success) {
+          setGlobalError(res?.message || 'Không thể vào phòng');
         } else if (res.roomCode) {
           saveLastRoomCode(res.roomCode);
           setCurrentScreen('ROOM');

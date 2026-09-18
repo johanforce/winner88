@@ -39,17 +39,25 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         xiangqiTimeMode?: XiangqiTimeMode;
       }, callback) => {
         try {
+          if (!data || !data.playerId) {
+            callback?.({ success: false, message: 'Thông tin người chơi không hợp lệ' });
+            return;
+          }
+          const pName = (data.playerName && data.playerName.trim()) || 'Người chơi';
+          const pAvatar = data.playerAvatar || '🤠';
+          const pRule: GameRule = data.rule || 'TIEN_LEN_MIEN_NAM';
+
           const room = roomManager.createRoom(
-            data.rule,
+            pRule,
             (code) => broadcastRoomUpdate(code),
             data.xiangqiTimeMode
           );
           const addRes = room.addPlayer(
             data.playerId,
             socket.id,
-            data.playerName,
-            data.playerAvatar,
-            data.reconnectToken,
+            pName,
+            pAvatar,
+            data.reconnectToken || 'tok_' + Math.random().toString(36).substring(2, 10),
             data.initialScore
           );
 
@@ -64,6 +72,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           callback?.({ success: true, roomCode: room.code });
           broadcastRoomUpdate(room.code);
         } catch (err: any) {
+          console.error('Error in ROOM_CREATE:', err);
           callback?.({ success: false, message: err.message || 'Lỗi khi tạo phòng' });
         }
       }

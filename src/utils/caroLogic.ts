@@ -1,9 +1,24 @@
 import { CaroPiece } from '../types';
 
-export const BOARD_SIZE = 15;
+export const BOARD_SIZE = 20;
 
 export function isInsideBoard(x: number, y: number): boolean {
   return x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE;
+}
+
+/**
+ * Kiểm tra xem ô có thuộc viền ngoài cùng của bàn cờ không (x=0, x=19, y=0, y=19)
+ */
+export function isBorderCell(x: number, y: number): boolean {
+  return x === 0 || x === BOARD_SIZE - 1 || y === 0 || y === BOARD_SIZE - 1;
+}
+
+/**
+ * Kiểm tra xem ô có được phép đánh cờ không:
+ * Bàn cờ 20x20 nhưng KHÔNG ĐƯỢC ĐÁNH VÀO ĐƯỜNG VIỀN NGOÀI
+ */
+export function isPlayableCell(x: number, y: number): boolean {
+  return x > 0 && x < BOARD_SIZE - 1 && y > 0 && y < BOARD_SIZE - 1;
 }
 
 /**
