@@ -1,4 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
+import { PositionEvaluation } from './chessAnalysisEngine';
 
 let aiClient: GoogleGenAI | null = null;
 
@@ -21,38 +22,59 @@ function getAIClient(): GoogleGenAI | null {
 }
 
 /**
- * Phân tích tổng quan thế trận Cờ Vua giữa Trắng và Đen sau mỗi 10 nước đi.
- * Gửi nhật ký ván đấu (PGN, FEN, số nước) cho Gemini để AI nhận định ngắn gọn cho khán giả.
+ * Phân tích chuyên nghiệp như một Grandmaster Cờ Vua Quốc Tế dành riêng cho khán giả.
+ * Nhận diện khai cuộc, đánh giá bên nào đang nắm lợi thế, bên nào vừa có nước đi thiên tài hoặc mắc sai lầm.
  */
 export async function analyzeChessPosition(
   pgn: string,
   fen: string,
   moveCount: number,
   whitePlayerName: string = 'Trắng',
-  blackPlayerName: string = 'Đen'
+  blackPlayerName: string = 'Đen',
+  evaluation?: PositionEvaluation
 ): Promise<string> {
-  const ai = getAIClient();
+  const fallbackCommentary =
+    evaluation?.fullGrandmasterCommentary ||
+    `⚖️ [Đánh giá nước ${Math.ceil(moveCount / 2)}]: Thế trận giữa ${whitePlayerName} (Trắng) và ${blackPlayerName} (Đen) đang diễn biến giằng co quyết liệt ở các ô trung tâm.`;
 
+  const ai = getAIClient();
   if (!ai) {
-    // Trả về nhận định dự phòng khách quan nếu chưa có API key trong môi trường test
-    return `♟️ [Phân tích nước ${moveCount}]: Thế trận giữa ${whitePlayerName} (Trắng) và ${blackPlayerName} (Đen) đang giằng co quyết liệt. Cả hai bên đang nỗ lực kiểm soát các ô trung tâm và củng cố vị trí Vua.`;
+    return fallbackCommentary;
   }
 
   try {
-    const prompt = `Bạn là một Đại kiện tướng Cờ Vua AI (Chess Grandmaster Bot) kiêm Bình luận viên trận đấu cho khán giả trong phòng xem.
-Dưới đây là nhật ký ván cờ vua sau ${moveCount} nước đi:
+    const fullMoveNum = Math.ceil(moveCount / 2);
+    const openingInfo = evaluation?.openingName
+      ? `- Khai cuộc nhận diện: ${evaluation.openingName} (${evaluation.openingSummary || ''})`
+      : '';
+    const materialInfo = evaluation
+      ? `- Điểm lực lượng: Trắng: ${evaluation.whiteMaterial}đ, Đen: ${evaluation.blackMaterial}đ (Chênh lệch: ${evaluation.materialDiff > 0 ? `+${evaluation.materialDiff} cho Trắng` : evaluation.materialDiff < 0 ? `+${Math.abs(evaluation.materialDiff)} cho Đen` : 'Cân bằng'})`
+      : '';
+    const tacticalInfo = evaluation?.brilliantAlert
+      ? `- Điểm nhấn chiến thuật: ${evaluation.brilliantAlert}`
+      : evaluation?.blunderAlert
+      ? `- Cảnh báo sai lầm: ${evaluation.blunderAlert}`
+      : evaluation?.tacticalNote
+      ? `- Nước cờ đáng chú ý: ${evaluation.tacticalNote}`
+      : '';
+
+    const prompt = `Bạn là một Đại kiện tướng Cờ Vua Quốc tế (Chess Grandmaster) kiêm Bình luận viên chuyên môn cao cấp đang bình luận trực tiếp cho KHÁN GIẢ theo dõi trận đấu.
+Dữ liệu ván đấu sau nước thứ ${fullMoveNum} (tổng ${moveCount} nửa nước):
 - Kỳ thủ Trắng: ${whitePlayerName}
 - Kỳ thủ Đen: ${blackPlayerName}
-- Chuỗi nước đi PGN:
+${openingInfo}
+${materialInfo}
+${tacticalInfo}
+- Nhật ký nước đi PGN:
 ${pgn || '(Chưa có PGN)'}
-- Vị trí bàn cờ hiện tại (FEN):
+- Vị trí bàn cờ FEN:
 ${fen}
 
-YÊU CẦU:
-1. Đưa ra một nhận định TỔNG QUAN, NGẮN GỌN (khoảng 2-3 câu, tối đa 50 từ) bằng tiếng Việt.
-2. Đánh giá nhanh: Bên nào đang kiểm soát trung tâm tốt hơn, thế cờ cân bằng hay nghiêng về Trắng/Đen, có đòn chiến thuật hay nguy cơ nào đáng chú ý không.
-3. Giọng điệu chuyên nghiệp, cuốn hút, khách quan như bình luận viên cờ vua quốc tế.
-Không cần phân tích biến thể rườm rà, tập trung vào bức tranh toàn cảnh!`;
+YÊU CẦU BÌNH LUẬN (CHỈ DÀNH CHO KHÁN GIẢ):
+1. Khai cuộc: Nêu tên khai cuộc (nếu ở giai đoạn đầu dưới 10 nước) và ý đồ chiến lược của 2 bên.
+2. Cục diện & Lợi thế: Chỉ rõ bên nào đang chiếm ưu thế (Trắng hay Đen), kiểm soát trung tâm và cấu trúc tốt ra sao.
+3. Phân tích nước đi then chốt: Bên nào vừa có nước đi thiên tài (phế quân, đột phá sắc bén) hoặc bên nào vừa mắc sai lầm/sơ hở (treo quân, mất tốt, Vua hở sườn).
+4. Giọng văn: Ngắn gọn (3-4 câu, khoảng 60-80 từ), phong cách Grandmaster quốc tế sắc sảo, kịch tính và cuốn hút khán giả, sử dụng thuật ngữ cờ vua chuẩn xác bằng tiếng Việt.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
@@ -67,5 +89,5 @@ Không cần phân tích biến thể rườm rà, tập trung vào bức tranh 
     console.error('Lỗi khi gọi Gemini phân tích cờ vua:', error);
   }
 
-  return `♟️ [Phân tích nước ${moveCount}]: Cục diện trận đấu sau ${moveCount} nước đang bước vào giai đoạn then chốt. Cả ${whitePlayerName} và ${blackPlayerName} đều đang duy trì sự tập trung cao độ để tìm kiếm cơ hội bứt phá!`;
+  return fallbackCommentary;
 }

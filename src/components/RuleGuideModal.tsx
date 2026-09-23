@@ -549,15 +549,15 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                 </ul>
               </div>
 
-              {/* 4. AI Gemini Phân Tích */}
-              <div className="bg-gradient-to-r from-indigo-950/60 via-purple-950/40 to-slate-900 border border-indigo-800/60 p-3.5 rounded-xl space-y-2">
-                <h3 className="font-bold text-indigo-300 text-xs flex items-center gap-1.5">
-                  <Flame className="w-4 h-4 text-amber-400" /> 4. Trợ Lý AI Gemini Phân Tích Thế Trận Tự Động
+              {/* 4. Khán Giả & Bình Luận Viên */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-amber-400" /> 4. Chế Độ Khán Giả &amp; Bình Luận Trực Tiếp
                 </h3>
                 <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
-                  <li>Hệ thống liên tục ghi lại toàn bộ <strong>Nhật ký nước đi (Move History / PGN)</strong> của ván cờ.</li>
-                  <li><strong>Cứ sau mỗi 10 nước đi</strong>, nhật ký ván đấu sẽ được gửi tự động cho mô hình <strong>Gemini</strong>.</li>
-                  <li>Bot AI sẽ xuất hiện ngay trong <strong>khung chat công khai</strong>, mang lại bài nhận định tổng quan về thế trận: ai chiếm ưu thế về không gian, kiểm soát ô trung tâm hay tiềm năng tấn công cánh!</li>
+                  <li>Khán giả trong phòng có thể theo dõi ván đấu thời gian thực từ mọi góc nhìn (xoay bàn cờ tùy ý).</li>
+                  <li>Trong suốt trận đấu, hệ thống phân tích thế cờ theo góc nhìn Grandmaster chuyên nghiệp (khai cuộc, đòn chiến thuật, đánh giá lợi thế, nước cờ then chốt).</li>
+                  <li><strong>Lưu ý:</strong> Các bản tin phân tích chuyên môn này chỉ hiển thị riêng trong khung chat cho Khán giả, 2 kỳ thủ đang thi đấu không xem được để đảm bảo tính công bằng và tập trung cao độ.</li>
                 </ul>
               </div>
             </>

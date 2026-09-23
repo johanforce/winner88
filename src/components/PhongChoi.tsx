@@ -587,7 +587,7 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
                 {isCoVua
-                  ? 'Cần đủ 2 kỳ thủ ở ghế Trắng và Đen để bắt đầu (10 phút/bên). Tối đa 4 khán giả. Cứ sau mỗi 10 nước đi, bot Gemini sẽ tự động phân tích thế trận trong khung chat!'
+                  ? 'Cần đủ 2 kỳ thủ ở ghế Trắng và Đen để bắt đầu (10 phút/bên). Tối đa 4 khán giả theo dõi ván đấu.'
                   : isBanTau
                   ? 'Cần 2 Thuyền trưởng ở Hạm đội 1 và Hạm đội 2 để khai chiến. Tối đa 6 khách theo dõi chiến trận!'
                   : isCaro
@@ -606,26 +606,6 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
               <span>{copied ? 'Đã sao chép!' : 'Chia sẻ mã'}</span>
             </button>
           </div>
-
-          {/* Chess AI Commentary Feature Card */}
-          {isCoVua && (
-            <div className="bg-gradient-to-r from-indigo-950/60 via-purple-950/40 to-slate-900 border border-indigo-800/60 p-4 rounded-2xl shadow-sm">
-              <div className="flex items-center gap-2 mb-1.5">
-                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-                <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">
-                  Phân Tích Thế Trận Tự Động (AI Gemini)
-                </span>
-                <span className="text-[10px] bg-indigo-900/60 text-indigo-200 border border-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold">
-                  2 Kỳ thủ • 4 Khán giả
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                🤖 Trong suốt ván đấu, hệ thống gửi toàn bộ nhật ký nước đi cho <strong>Gemini</strong>.
-                Cứ <strong>sau mỗi 10 nước đi</strong>, bot AI sẽ xuất hiện trong khung chat để phân tích tổng quan
-                cục diện Đen và Trắng cho khán giả và người chơi cùng theo dõi!
-              </p>
-            </div>
-          )}
 
           {/* Battleship Information Banner */}
           {isBanTau && (

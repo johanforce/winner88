@@ -1,6 +1,6 @@
 {
-  "name": "Winner88 - Game Bài & Cờ Tướng Cờ Caro Bắn Tàu Online",
-  "description": "Nền tảng thi đấu Tiến Lên Miền Nam, Sâm Lốc, Cờ Tướng, Cờ Caro, Bắn Tàu và Cờ Cá Ngựa (2-4 người, 4 khách xem) thời gian thực.",
+  "name": "Winner88 - Game Bài & Cờ Tướng Cờ Vua Cờ Caro Bắn Tàu Online",
+  "description": "Nền tảng thi đấu Tiến Lên Miền Nam, Sâm Lốc, Cờ Tướng, Cờ Vua, Cờ Caro, Bắn Tàu và Cờ Cá Ngựa thời gian thực.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

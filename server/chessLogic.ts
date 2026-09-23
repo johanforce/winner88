@@ -126,8 +126,13 @@ export function executeChessMove(
       winReason = 'FIFTY_MOVES';
     }
 
-    // Trigger Gemini analysis every 10 moves (e.g. at move 10, 20, 30...)
-    const triggerAiAnalysis = newHistory.length > 0 && newHistory.length % 10 === 0;
+    // Trigger Grandmaster commentary for spectators at key milestones:
+    // Move 4 (opening revealed), Move 8, every 6 moves thereafter (14, 20, 26...),
+    // or on significant game events (Queen capture or Checkmate)
+    const count = newHistory.length;
+    const isKeyMilestone = count === 4 || count === 8 || (count > 8 && (count - 8) % 6 === 0);
+    const isMajorTacticalEvent = moveResult.captured === 'q' || isCheckmate;
+    const triggerAiAnalysis = count > 0 && (isKeyMilestone || isMajorTacticalEvent);
 
     const newState: ChessState = {
       ...currentState,

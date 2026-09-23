@@ -633,11 +633,11 @@ export const Lobby: React.FC<LobbyProps> = ({
                     <div className="flex items-center gap-2">
                       <span className="font-black text-sm block text-white">Cờ Vua (Chess)</span>
                       <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold">
-                        AI GEMINI
+                        10 PHÚT
                       </span>
                     </div>
                     <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      Cờ vua tiêu chuẩn (2 kỳ thủ + 4 khán giả). Sau mỗi 10 nước, bot Gemini tự động phân tích thế trận!
+                      Cờ vua tiêu chuẩn đối kháng 2 kỳ thủ, có chế độ khán giả theo dõi và bình luận.
                     </span>
                   </button>
                 </div>

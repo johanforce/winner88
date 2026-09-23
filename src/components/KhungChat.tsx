@@ -14,6 +14,7 @@ interface KhungChatProps {
   isFloating?: boolean;
   onReadAll?: () => void;
   onInterceptMessage?: (text: string) => boolean;
+  isSpectator?: boolean;
 }
 
 const QUICK_CHATS = [
@@ -36,8 +37,11 @@ export const KhungChat: React.FC<KhungChatProps> = ({
   isFloating = false,
   onReadAll,
   onInterceptMessage,
+  isSpectator = false,
 }) => {
-  const effectiveMessages = messages ?? chatMessages ?? [];
+  const rawMessages = messages ?? chatMessages ?? [];
+  // Lọc: người chơi trong trận KHÔNG nhìn thấy tin nhắn bình luận chuyên môn của Grandmaster
+  const effectiveMessages = rawMessages.filter((m) => !m.isSpectatorOnly || isSpectator);
   const effectivePlayerId = playerId ?? myPlayerId ?? '';
 
   const [inputText, setInputText] = useState('');
@@ -169,6 +173,31 @@ export const KhungChat: React.FC<KhungChatProps> = ({
           </div>
         ) : (
           effectiveMessages.map((msg) => {
+            // Tin nhắn bình luận chuyên môn Grandmaster chỉ dành cho Khán giả
+            if (msg.senderId === 'BOT_GEMINI' || msg.isSpectatorOnly) {
+              return (
+                <div
+                  key={msg.id}
+                  className="my-2.5 p-3 rounded-2xl bg-gradient-to-br from-amber-950/80 via-slate-900 to-amber-950/60 border border-amber-600/60 shadow-xl"
+                >
+                  <div className="flex items-center justify-between gap-2 pb-1.5 mb-2 border-b border-amber-800/40">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">♟️</span>
+                      <span className="text-[11px] font-extrabold uppercase tracking-wide text-amber-400">
+                        Bình Luận Grandmaster
+                      </span>
+                    </div>
+                    <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono font-bold">
+                      DÀNH CHO KHÁN GIẢ
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-line font-medium">
+                    {msg.text}
+                  </p>
+                </div>
+              );
+            }
+
             if (msg.isSystem) {
               return (
                 <div key={msg.id} className="text-center my-1.5">

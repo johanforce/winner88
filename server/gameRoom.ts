@@ -69,6 +69,7 @@ import {
   executeChessMove,
 } from './chessLogic';
 import { analyzeChessPosition } from './geminiService';
+import { generateLocalGrandmasterAnalysis } from './chessAnalysisEngine';
 
 export class GameRoom {
   public code: string;
@@ -1926,7 +1927,7 @@ export class GameRoom {
       );
     }
 
-    // AI COMMENTARY: Cứ sau mỗi 10 nước đi, bot Gemini phân tích thế cờ Đen và Trắng
+    // GRANDMASTER COMMENTARY: Phân tích chuyên môn sâu sắc chỉ hiển thị cho khán giả (spectator)
     if (moveRes.triggerAiAnalysis) {
       const moveCount = this.chessState.moveHistory.length;
       const whiteName = this.players.find((p) => p.id === this.chessState?.whitePlayerId)?.name || 'Trắng';
@@ -1934,10 +1935,18 @@ export class GameRoom {
       const currentPgn = this.chessState.pgn;
       const currentFen = this.chessState.fen;
 
-      analyzeChessPosition(currentPgn, currentFen, moveCount, whiteName, blackName)
+      const localEval = generateLocalGrandmasterAnalysis(
+        this.chessState.moveHistory,
+        currentFen,
+        whiteName,
+        blackName
+      );
+
+      analyzeChessPosition(currentPgn, currentFen, moveCount, whiteName, blackName, localEval)
         .then((analysis) => {
           if (!this.chessState) return;
-          this.addAiChat(analysis);
+          // isSpectatorOnly = true: Chỉ khách mới xem được bình luận này, 2 người chơi không xem được
+          this.addAiChat(analysis, true);
           this.chessState.lastAiAnalysis = {
             moveIndex: moveCount,
             text: analysis,
@@ -1947,6 +1956,10 @@ export class GameRoom {
         })
         .catch((err) => {
           console.error('Lỗi khi phân tích cờ vua AI:', err);
+          if (localEval?.fullGrandmasterCommentary) {
+            this.addAiChat(localEval.fullGrandmasterCommentary, true);
+            this.onStateChange();
+          }
         });
     }
 
@@ -2621,7 +2634,24 @@ export class GameRoom {
 
   // --- DỮ LIỆU ĐỒNG BỘ CLIENT ---
 
-  public getPublicState(): RoomPublicState {
+  public getPublicState(targetPlayerId?: string): RoomPublicState {
+    const targetPlayer = targetPlayerId ? this.players.find((p) => p.id === targetPlayerId) : null;
+    const isSpectator = targetPlayer ? !!targetPlayer.isSpectator : false;
+
+    // Lọc tin nhắn: người chơi trong ván đấu không xem được phân tích của Grandmaster
+    const filteredChat = isSpectator
+      ? this.chatMessages
+      : this.chatMessages.filter((m) => !m.isSpectatorOnly);
+
+    // Không gửi lastAiAnalysis cho 2 kỳ thủ đang thi đấu trực tiếp
+    let currentChessState = this.chessState;
+    if (this.chessState && targetPlayer && !isSpectator) {
+      currentChessState = {
+        ...this.chessState,
+        lastAiAnalysis: null,
+      };
+    }
+
     const playersInfo: PlayerPublicInfo[] = this.players.map((p) => ({
       id: p.id,
       name: p.name,
@@ -2663,9 +2693,9 @@ export class GameRoom {
       caroState: this.caroState,
       banTauState: this.banTauState,
       coCaNguaState: this.coCaNguaState,
-      chessState: this.chessState,
+      chessState: currentChessState,
       results: this.results,
-      chatMessages: this.chatMessages,
+      chatMessages: filteredChat,
     };
   }
 
@@ -2704,15 +2734,16 @@ export class GameRoom {
     return message;
   }
 
-  public addAiChat(text: string): ChatMessage {
+  public addAiChat(text: string, isSpectatorOnly: boolean = false): ChatMessage {
     const message: ChatMessage = {
       id: `ai_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       senderId: 'BOT_GEMINI',
-      senderName: '🤖 AI Grandmaster',
+      senderName: '🏆 Grandmaster Bình Luận (Chế độ Khách)',
       senderAvatar: '♟️',
       text,
       timestamp: Date.now(),
       isSystem: true,
+      isSpectatorOnly,
     };
 
     this.chatMessages.push(message);

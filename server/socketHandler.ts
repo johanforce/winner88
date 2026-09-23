@@ -8,21 +8,23 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
     const room = roomManager.getRoom(roomCode);
     if (!room) return;
 
-    const publicState = room.getPublicState();
-    io.to(roomCode).emit('ROOM_STATE', publicState);
-
-    // Send individual secret cards or ships to each player's socket
+    // Send individual state, secret cards, and filtered chat to each player's socket
     room.players.forEach((player) => {
       if (player.socketId) {
+        const playerState = room.getPublicState(player.id);
+        io.to(player.socketId).emit('ROOM_STATE', playerState);
         io.to(player.socketId).emit('PLAYER_CARDS', room.getPlayerCards(player.id));
         if (room.rule === 'BAN_TAU') {
           io.to(player.socketId).emit('BAN_TAU_MY_SHIPS', room.getPlayerShips(player.id));
         }
+
+        // Lọc tin nhắn bình luận: chỉ khán giả (isSpectator) mới nhận được phân tích chuyên môn
+        const playerChat = player.isSpectator
+          ? room.chatMessages
+          : room.chatMessages.filter((m) => !m.isSpectatorOnly);
+        io.to(player.socketId).emit('CHAT_HISTORY', playerChat);
       }
     });
-
-    // Send chat messages
-    io.to(roomCode).emit('CHAT_HISTORY', room.chatMessages);
 
     // Update lobby lists
     io.emit('LOBBY_ROOMS_UPDATE', roomManager.getOpenRoomsList());
@@ -724,7 +726,6 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       if (room && data.text?.trim()) {
         socket.join(code);
         room.addChatMessage(data.playerId, data.text.trim());
-        io.to(code).emit('CHAT_HISTORY', room.chatMessages);
         broadcastRoomUpdate(code);
       }
     });

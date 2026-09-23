@@ -6,20 +6,16 @@ import {
   LogOut,
   BookOpen,
   RotateCcw,
-  Sparkles,
   AlertTriangle,
   Crown,
-  Eye,
   Handshake,
   Flag,
   Trophy,
   History,
   MessageSquare,
   Users,
-  X,
-  Swords,
-  Bot,
-  Brain,
+  Palette,
+  ShieldAlert,
 } from 'lucide-react';
 import { RoomPublicState, ChatMessage, ChessSide } from '../types';
 import { socket } from '../socket';
@@ -38,6 +34,50 @@ interface BanCoVuaProps {
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
+// Theme definitions for the chessboard
+type BoardTheme = 'wood' | 'tournament';
+
+const BOARD_THEMES: Record<
+  BoardTheme,
+  {
+    name: string;
+    lightSquare: string;
+    darkSquare: string;
+    bezelBg: string;
+    bezelBorder: string;
+    coordLight: string;
+    coordDark: string;
+  }
+> = {
+  wood: {
+    name: 'Gỗ Trầm Cổ Điển',
+    lightSquare: 'bg-[#f0d9b5]',
+    darkSquare: 'bg-[#b58863]',
+    bezelBg: 'bg-gradient-to-br from-[#38220f] via-[#241407] to-[#1a0e05]',
+    bezelBorder: 'border-[#5c3a1e]',
+    coordLight: 'text-[#b58863]',
+    coordDark: 'text-[#f0d9b5]',
+  },
+  tournament: {
+    name: 'Xanh FIDE Giải Đấu',
+    lightSquare: 'bg-[#eeeed2]',
+    darkSquare: 'bg-[#769656]',
+    bezelBg: 'bg-gradient-to-br from-[#1a2e22] via-[#0f1c14] to-[#08100b]',
+    bezelBorder: 'border-[#2d4d38]',
+    coordLight: 'text-[#769656]',
+    coordDark: 'text-[#eeeed2]',
+  },
+};
+
+const PIECE_VALS: Record<string, number> = {
+  p: 1,
+  n: 3,
+  b: 3,
+  r: 5,
+  q: 9,
+  k: 0,
+};
+
 export const BanCoVua: React.FC<BanCoVuaProps> = ({
   roomState,
   myPlayerId,
@@ -46,7 +86,6 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 }) => {
   const chessState = roomState.chessState;
   const me = roomState.players.find((p) => p.id === myPlayerId);
-  const isHost = me?.isHost || false;
 
   const whitePlayer = roomState.players.find(
     (p) => p.seatIndex === 0 || p.chessSide === 'WHITE'
@@ -73,6 +112,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
   // Board orientation: black on bottom if I am black; otherwise white on bottom
   const [isFlipped, setIsFlipped] = useState<boolean>(mySide === 'BLACK');
+  const [boardTheme, setBoardTheme] = useState<BoardTheme>('wood');
 
   // Selected square e.g. 'e2'
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
@@ -132,12 +172,12 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
     }
   }, [chessState?.moveHistory?.length]);
 
-  // AI Commentary audio notification
+  // Commentary sound cue for spectators only
   useEffect(() => {
-    if (chessState?.lastAiAnalysis) {
+    if (isSpectator && chessState?.lastAiAnalysis) {
       chessSound.playAiCommentary();
     }
-  }, [chessState?.lastAiAnalysis?.timestamp]);
+  }, [chessState?.lastAiAnalysis?.timestamp, isSpectator]);
 
   // Win confetti & audio
   useEffect(() => {
@@ -159,6 +199,66 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
       setIsGameOverModalDismissed(false);
     }
   }, [chessState?.winnerSide, chessState?.winReason]);
+
+  // Calculate captured pieces and material score
+  const { whiteCaptured, blackCaptured, whiteMaterialAdv, blackMaterialAdv } = useMemo(() => {
+    // Initial piece counts
+    const initialCounts: Record<string, number> = {
+      p: 8,
+      n: 2,
+      b: 2,
+      r: 2,
+      q: 1,
+    };
+
+    const whiteCurrent: Record<string, number> = { p: 0, n: 0, b: 0, r: 0, q: 0 };
+    const blackCurrent: Record<string, number> = { p: 0, n: 0, b: 0, r: 0, q: 0 };
+
+    let whiteScore = 0;
+    let blackScore = 0;
+
+    const board = chess.board();
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = board[r][c];
+        if (!piece || piece.type === 'k') continue;
+        const val = PIECE_VALS[piece.type] || 0;
+        if (piece.color === 'w') {
+          whiteCurrent[piece.type] = (whiteCurrent[piece.type] || 0) + 1;
+          whiteScore += val;
+        } else {
+          blackCurrent[piece.type] = (blackCurrent[piece.type] || 0) + 1;
+          blackScore += val;
+        }
+      }
+    }
+
+    // Pieces captured by White (i.e. missing black pieces)
+    const whiteCapturedList: { type: 'p' | 'n' | 'b' | 'r' | 'q'; count: number }[] = [];
+    // Pieces captured by Black (i.e. missing white pieces)
+    const blackCapturedList: { type: 'p' | 'n' | 'b' | 'r' | 'q'; count: number }[] = [];
+
+    const order: ('q' | 'r' | 'b' | 'n' | 'p')[] = ['q', 'r', 'b', 'n', 'p'];
+    for (const t of order) {
+      const missingBlack = (initialCounts[t] || 0) - (blackCurrent[t] || 0);
+      if (missingBlack > 0) {
+        whiteCapturedList.push({ type: t, count: missingBlack });
+      }
+      const missingWhite = (initialCounts[t] || 0) - (whiteCurrent[t] || 0);
+      if (missingWhite > 0) {
+        blackCapturedList.push({ type: t, count: missingWhite });
+      }
+    }
+
+    const diff = whiteScore - blackScore;
+
+    return {
+      whiteCaptured: whiteCapturedList,
+      blackCaptured: blackCapturedList,
+      whiteMaterialAdv: diff > 0 ? diff : 0,
+      blackMaterialAdv: diff < 0 ? Math.abs(diff) : 0,
+    };
+  }, [chess]);
 
   // Compute legal moves for current selected square
   const legalMovesForSelected = useMemo(() => {
@@ -218,29 +318,27 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
     // 2. If a piece was selected and clicking a target square
     if (selectedSquare) {
       if (legalTargetSquares.has(square)) {
-        // Check if promotion is needed (Pawn moving to 8th rank for white or 1st rank for black)
-        const selectedPiece = chess.get(selectedSquare as any);
-        const isPawn = selectedPiece && selectedPiece.type === 'p';
-        const isPromotion =
+        // Check if pawn promotion is needed
+        const movingPiece = chess.get(selectedSquare as any);
+        const isPawn = movingPiece && movingPiece.type === 'p';
+        const isPromoting =
           isPawn &&
           ((mySide === 'WHITE' && square[1] === '8') ||
             (mySide === 'BLACK' && square[1] === '1'));
 
-        if (isPromotion) {
+        if (isPromoting) {
           setPendingPromotion({ from: selectedSquare, to: square });
-          return;
+        } else {
+          executeMove(selectedSquare, square);
+          setSelectedSquare(null);
         }
-
-        executeMove(selectedSquare, square);
-        setSelectedSquare(null);
       } else {
         setSelectedSquare(null);
       }
     }
   };
 
-  const executeMove = (from: string, to: string, promotion?: string) => {
-    setActionError(null);
+  const executeMove = (from: string, to: string, promotion?: 'q' | 'r' | 'b' | 'n') => {
     socket.emit(
       'GAME_CHESS_MOVE',
       {
@@ -348,26 +446,33 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
   const displayFiles = isFlipped ? [...FILES].reverse() : FILES;
   const displayRanks = isFlipped ? [...RANKS].reverse() : RANKS;
 
-  // Incoming draw offer from opponent
+  // Active theme configuration
+  const theme = BOARD_THEMES[boardTheme];
+
   const isIncomingDrawOffer =
     chessState?.drawOfferFrom &&
-    mySide !== null &&
+    mySide &&
     chessState.drawOfferFrom !== mySide &&
     !chessState.winnerSide;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col select-none">
       {/* Top Header Navigation */}
-      <header className="bg-slate-900/90 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shadow-md shrink-0">
+      <header className="bg-slate-900/95 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shadow-md shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">♟️</span>
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl drop-shadow">♟️</span>
             <div>
-              <h1 className="font-black text-sm text-white flex items-center gap-1.5">
+              <h1 className="font-black text-sm text-white flex items-center gap-2">
                 <span>CỜ VUA TIÊU CHUẨN</span>
-                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-600 px-1.5 py-0.5 rounded font-bold">
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-600/60 px-1.5 py-0.5 rounded font-bold">
                   FIDE 10M
                 </span>
+                {isSpectator && (
+                  <span className="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-700 px-1.5 py-0.5 rounded font-bold">
+                    KHÁN GIẢ
+                  </span>
+                )}
               </h1>
               <p className="text-[11px] text-slate-400">
                 Phòng: <span className="font-mono font-bold text-amber-400">{roomState.code}</span>
@@ -378,6 +483,17 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
         {/* Header Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* Board Theme Toggle */}
+          <button
+            onClick={() => setBoardTheme(boardTheme === 'wood' ? 'tournament' : 'wood')}
+            title={`Đổi giao diện: ${boardTheme === 'wood' ? 'Xanh FIDE' : 'Gỗ Trầm'}`}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <Palette className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">{theme.name}</span>
+          </button>
+
+          {/* Flip Board */}
           <button
             onClick={() => setIsFlipped(!isFlipped)}
             title="Xoay hướng bàn cờ"
@@ -387,6 +503,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             <span className="hidden sm:inline">Xoay bàn</span>
           </button>
 
+          {/* Rules Modal */}
           <button
             onClick={() => setIsRuleModalOpen(true)}
             className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
@@ -395,6 +512,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             <span className="hidden sm:inline">Luật chơi</span>
           </button>
 
+          {/* Leave Button */}
           <button
             onClick={onLeaveRoom}
             className="px-2.5 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 rounded-xl text-xs font-semibold text-rose-300 hover:text-rose-200 flex items-center gap-1.5 transition cursor-pointer"
@@ -411,13 +529,26 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
         <div className="flex-1 flex flex-col items-center justify-center min-w-0">
           {/* Top Player Bar (Opponent or Black if normal) */}
           <div className="w-full max-w-[560px] mb-2">
-            {renderPlayerBar(isFlipped ? whitePlayer : blackPlayer, isFlipped ? 'WHITE' : 'BLACK')}
+            {renderPlayerBar(
+              isFlipped ? whitePlayer : blackPlayer,
+              isFlipped ? 'WHITE' : 'BLACK',
+              isFlipped ? whiteCaptured : blackCaptured,
+              isFlipped ? whiteMaterialAdv : blackMaterialAdv
+            )}
           </div>
 
-          {/* Chess Board Container */}
-          <div className="relative w-full max-w-[560px] aspect-square bg-[#779556] p-2 sm:p-3 rounded-2xl shadow-2xl border-4 border-stone-800 flex flex-col justify-center">
+          {/* Chessboard Container with Luxury Bezel */}
+          <div
+            className={`relative w-full max-w-[560px] aspect-square p-2.5 sm:p-3.5 rounded-2xl shadow-2xl border-4 ${theme.bezelBorder} ${theme.bezelBg} flex flex-col justify-center transition-colors duration-300`}
+          >
+            {/* Corner Decorative Studs */}
+            <div className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-amber-500/30 border border-amber-400/40" />
+            <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500/30 border border-amber-400/40" />
+            <div className="absolute bottom-1.5 left-1.5 w-2 h-2 rounded-full bg-amber-500/30 border border-amber-400/40" />
+            <div className="absolute bottom-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500/30 border border-amber-400/40" />
+
             {/* The 8x8 Grid */}
-            <div className="grid grid-cols-8 grid-rows-8 w-full h-full rounded-lg overflow-hidden border border-black/20">
+            <div className="grid grid-cols-8 grid-rows-8 w-full h-full rounded-xl overflow-hidden shadow-inner border border-black/30">
               {displayRanks.map((rank, rIdx) =>
                 displayFiles.map((file, fIdx) => {
                   const square = `${file}${rank}`;
@@ -434,17 +565,27 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                     <div
                       key={square}
                       onClick={() => handleSquareClick(square)}
-                      className={`relative flex items-center justify-center cursor-pointer transition-colors ${
-                        isLightSquare ? 'bg-[#ebecd0]' : 'bg-[#779556]'
-                      } ${isSelected ? '!bg-[#f6f669]' : ''} ${
-                        isLastMove && !isSelected ? '!bg-[#cdd26a]' : ''
-                      } ${isKingInCheck ? '!bg-rose-500/80 animate-pulse' : ''}`}
+                      className={`relative flex items-center justify-center cursor-pointer transition-all duration-150 select-none ${
+                        isLightSquare ? theme.lightSquare : theme.darkSquare
+                      } ${
+                        isSelected
+                          ? '!bg-[#f7c04a] ring-2 ring-amber-300 ring-inset shadow-inner'
+                          : ''
+                      } ${
+                        isLastMove && !isSelected
+                          ? '!bg-[#cdd26a]/90 ring-1 ring-amber-400/40'
+                          : ''
+                      } ${
+                        isKingInCheck
+                          ? '!bg-gradient-to-r from-rose-600 to-red-600 animate-pulse ring-4 ring-rose-400'
+                          : ''
+                      }`}
                     >
                       {/* Rank Label on left column */}
                       {fIdx === 0 && (
                         <span
-                          className={`absolute top-0.5 left-1 text-[10px] font-extrabold select-none ${
-                            isLightSquare ? 'text-[#779556]' : 'text-[#ebecd0]'
+                          className={`absolute top-0.5 left-1 text-[10px] font-black select-none pointer-events-none opacity-80 ${
+                            isLightSquare ? theme.coordLight : theme.coordDark
                           }`}
                         >
                           {rank}
@@ -454,8 +595,8 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                       {/* File Label on bottom row */}
                       {rIdx === 7 && (
                         <span
-                          className={`absolute bottom-0.5 right-1 text-[10px] font-extrabold select-none ${
-                            isLightSquare ? 'text-[#779556]' : 'text-[#ebecd0]'
+                          className={`absolute bottom-0.5 right-1 text-[10px] font-black select-none pointer-events-none opacity-80 ${
+                            isLightSquare ? theme.coordLight : theme.coordDark
                           }`}
                         >
                           {file}
@@ -464,19 +605,32 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
                       {/* Piece Icon */}
                       {piece && (
-                        <div className="w-[84%] h-[84%] z-10 transition-transform active:scale-95 drop-shadow-md">
+                        <div
+                          className={`w-[86%] h-[86%] z-10 transition-all duration-150 ${
+                            isSelected
+                              ? 'scale-110 -translate-y-1 drop-shadow-2xl'
+                              : 'active:scale-95 drop-shadow-md'
+                          }`}
+                        >
                           <ChessPieceSvg type={piece.type} color={piece.color} />
+                        </div>
+                      )}
+
+                      {/* King in Check Warning Icon */}
+                      {isKingInCheck && (
+                        <div className="absolute top-1 right-1 z-20 pointer-events-none animate-bounce">
+                          <ShieldAlert className="w-3.5 h-3.5 text-white drop-shadow" />
                         </div>
                       )}
 
                       {/* Move Hint: Empty square target */}
                       {isLegalTarget && !piece && (
-                        <div className="absolute w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-black/25 z-20 pointer-events-none" />
+                        <div className="absolute w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-slate-900/30 hover:scale-125 transition-transform z-20 pointer-events-none border border-black/20" />
                       )}
 
                       {/* Move Hint: Capture target */}
                       {isLegalTarget && piece && (
-                        <div className="absolute inset-0 border-4 border-rose-500/70 rounded-full z-20 pointer-events-none" />
+                        <div className="absolute inset-1 border-4 border-rose-500/80 rounded-full z-20 pointer-events-none animate-pulse" />
                       )}
                     </div>
                   );
@@ -489,7 +643,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
               <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-30 rounded-2xl flex flex-col items-center justify-center p-4">
                 <h4 className="text-sm font-bold text-amber-300 mb-3 flex items-center gap-1.5">
                   <Crown className="w-4 h-4 text-amber-400" />
-                  <span>Chọn Quân Phong Cấp (Pawn Promotion)</span>
+                  <span>Chọn Quân Phong Cấp (Promotion)</span>
                 </h4>
                 <div className="grid grid-cols-4 gap-3 bg-slate-900 p-3 rounded-2xl border border-slate-700">
                   {[
@@ -527,7 +681,12 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
           {/* Bottom Player Bar (Me or White if normal) */}
           <div className="w-full max-w-[560px] mt-2">
-            {renderPlayerBar(isFlipped ? blackPlayer : whitePlayer, isFlipped ? 'BLACK' : 'WHITE')}
+            {renderPlayerBar(
+              isFlipped ? blackPlayer : whitePlayer,
+              isFlipped ? 'BLACK' : 'WHITE',
+              isFlipped ? blackCaptured : whiteCaptured,
+              isFlipped ? blackMaterialAdv : whiteMaterialAdv
+            )}
           </div>
 
           {/* Duel Control Buttons for Active Players */}
@@ -560,51 +719,10 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
           )}
         </div>
 
-        {/* Right Sidebar: AI Commentary, Move History, Chat & Spectators */}
-        <div className="w-full lg:w-96 flex flex-col bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg h-[500px] lg:h-auto min-h-[460px]">
-          {/* AI Commentary Spotlight Banner */}
-          <div className="bg-gradient-to-r from-indigo-950/90 via-purple-950/80 to-slate-900 border-b border-indigo-900/50 p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Bot className="w-4 h-4 text-indigo-400 animate-pulse" />
-                <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-300 flex items-center gap-1">
-                  <span>Trợ Lý AI Grandmaster</span>
-                  <Sparkles className="w-3 h-3 text-amber-400" />
-                </span>
-              </div>
-              <span className="text-[10px] bg-indigo-900/60 text-indigo-300 border border-indigo-700/60 px-1.5 py-0.5 rounded font-mono">
-                Gemini 2.5
-              </span>
-            </div>
-
-            {chessState?.lastAiAnalysis ? (
-              <div className="bg-indigo-950/60 border border-indigo-800/50 p-2.5 rounded-xl">
-                <div className="flex items-center justify-between text-[11px] text-amber-300 font-bold mb-1">
-                  <span>Nhận định sau nước thứ {chessState.lastAiAnalysis.moveIndex}:</span>
-                  <span className="text-[10px] text-slate-400 font-normal">
-                    {new Date(chessState.lastAiAnalysis.timestamp).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-200 leading-relaxed italic line-clamp-3">
-                  "{chessState.lastAiAnalysis.text}"
-                </p>
-              </div>
-            ) : (
-              <div className="text-[11px] text-slate-400 flex items-center gap-1.5 bg-slate-950/50 p-2 rounded-xl border border-slate-800">
-                <Brain className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                <span>
-                  Bot Gemini sẽ tự động nhận định thế cờ Đen &amp; Trắng sau mỗi 10 nước đi (nước hiện tại:{' '}
-                  <strong className="text-indigo-300">{chessState?.moveHistory?.length || 0}</strong>)
-                </span>
-              </div>
-            )}
-          </div>
-
+        {/* Right Sidebar: Move History, Chat & Spectators */}
+        <div className="w-full lg:w-96 flex flex-col bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg h-[520px] lg:h-auto min-h-[480px]">
           {/* Sidebar Tabs */}
-          <div className="flex border-b border-slate-800 bg-slate-950/60 px-2 pt-2">
+          <div className="flex border-b border-slate-800 bg-slate-950/80 px-2 pt-2">
             <button
               onClick={() => setActiveTab('CHAT')}
               className={`flex-1 py-2 text-xs font-bold border-b-2 transition flex items-center justify-center gap-1.5 cursor-pointer relative ${
@@ -651,10 +769,12 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
           <div className="flex-1 overflow-hidden flex flex-col">
             {activeTab === 'CHAT' && (
               <div className="flex-1 h-full min-h-0">
+                {/* KhungChat with isSpectator flag: only spectators receive Grandmaster commentary */}
                 <KhungChat
                   roomCode={roomState.code}
                   myPlayerId={myPlayerId}
                   messages={chatMessages}
+                  isSpectator={isSpectator}
                 />
               </div>
             )}
@@ -662,37 +782,30 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             {activeTab === 'HISTORY' && (
               <div className="flex-1 overflow-y-auto p-3 space-y-1">
                 {movePairs.length === 0 ? (
-                  <div className="text-center py-10 text-xs text-slate-500">
-                    Chưa có nước đi nào. Trận đấu bắt đầu khi quân Trắng đi nước đầu tiên!
+                  <div className="text-center py-12 text-xs text-slate-500">
+                    Chưa có nước đi nào. Ván cờ bắt đầu khi quân Trắng xuất phát!
                   </div>
                 ) : (
                   <div className="border border-slate-800 rounded-xl overflow-hidden text-xs">
-                    <div className="grid grid-cols-6 bg-slate-950 p-2 font-bold text-slate-400 border-b border-slate-800">
+                    <div className="grid grid-cols-5 bg-slate-950 p-2 font-bold text-slate-400 border-b border-slate-800">
                       <span className="col-span-1 text-center">#</span>
                       <span className="col-span-2 text-slate-200">Trắng (White)</span>
                       <span className="col-span-2 text-slate-200">Đen (Black)</span>
-                      <span className="col-span-1 text-center text-slate-500">AI</span>
                     </div>
-                    {movePairs.map((pair) => {
-                      const isAiMove = (pair.index * 2) % 10 === 0 || (pair.index * 2 - 1) % 10 === 0;
-                      return (
-                        <div
-                          key={pair.index}
-                          className={`grid grid-cols-6 p-2 border-b border-slate-800/60 font-mono transition ${
-                            pair.index % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/80'
-                          }`}
-                        >
-                          <span className="col-span-1 text-center text-slate-500 font-bold">
-                            {pair.index}.
-                          </span>
-                          <span className="col-span-2 text-white font-semibold">{pair.white || '...'}</span>
-                          <span className="col-span-2 text-slate-300 font-semibold">{pair.black || ''}</span>
-                          <span className="col-span-1 text-center">
-                            {isAiMove ? <Sparkles className="w-3 h-3 text-amber-400 inline" /> : null}
-                          </span>
-                        </div>
-                      );
-                    })}
+                    {movePairs.map((pair) => (
+                      <div
+                        key={pair.index}
+                        className={`grid grid-cols-5 p-2 border-b border-slate-800/60 font-mono transition ${
+                          pair.index % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/80'
+                        }`}
+                      >
+                        <span className="col-span-1 text-center text-slate-500 font-bold">
+                          {pair.index}.
+                        </span>
+                        <span className="col-span-2 text-white font-semibold">{pair.white || '...'}</span>
+                        <span className="col-span-2 text-slate-300 font-semibold">{pair.black || ''}</span>
+                      </div>
+                    ))}
                     <div ref={moveHistoryEndRef} />
                   </div>
                 )}
@@ -702,7 +815,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             {activeTab === 'SPECTATORS' && (
               <div className="flex-1 overflow-y-auto p-3 space-y-2">
                 <div className="text-xs text-slate-400 mb-2">
-                  Phòng cho phép tối đa <strong>4 khán giả</strong> cùng theo dõi và đọc phân tích từ AI:
+                  Phòng hỗ trợ tối đa <strong>4 khán giả</strong> theo dõi ván cờ trực tiếp:
                 </div>
                 {spectators.length === 0 ? (
                   <div className="text-center py-8 text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800 p-4">
@@ -920,7 +1033,9 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
   // Helper to render player info bar above / below the board
   function renderPlayerBar(
     player: typeof whitePlayer,
-    side: 'WHITE' | 'BLACK'
+    side: 'WHITE' | 'BLACK',
+    capturedPieces: { type: 'p' | 'n' | 'b' | 'r' | 'q'; count: number }[],
+    materialAdvantage: number
   ) {
     if (!chessState) return null;
     const isWhite = side === 'WHITE';
@@ -932,50 +1047,76 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
     return (
       <div
-        className={`flex items-center justify-between p-2.5 rounded-xl border transition ${
+        className={`flex items-center justify-between p-2.5 rounded-xl border transition duration-200 ${
           isCurrentTurn
-            ? 'bg-slate-900 border-amber-500 ring-2 ring-amber-500/20'
+            ? 'bg-slate-900 border-amber-500/80 ring-2 ring-amber-500/20 shadow-lg'
             : 'bg-slate-900/60 border-slate-800'
         }`}
       >
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <span className="text-2xl">{player?.avatar || '👤'}</span>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="relative shrink-0">
+            <span className="text-2xl drop-shadow">{player?.avatar || '👤'}</span>
             <span
-              className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border border-black flex items-center justify-center text-[10px] ${
-                isWhite ? 'bg-white text-slate-900 font-bold' : 'bg-slate-900 text-white border-white'
+              className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border flex items-center justify-center text-[10px] font-black ${
+                isWhite
+                  ? 'bg-white text-slate-900 border-black'
+                  : 'bg-slate-900 text-white border-white'
               }`}
             >
               {isWhite ? 'W' : 'B'}
             </span>
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-white truncate max-w-[140px] sm:max-w-[200px]">
+              <span className="text-xs font-bold text-white truncate max-w-[130px] sm:max-w-[180px]">
                 {player?.name || (isWhite ? 'Chưa có quân Trắng' : 'Chưa có quân Đen')}
               </span>
               {player?.id === myPlayerId && (
-                <span className="text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1 rounded">
+                <span className="text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1 rounded shrink-0">
                   Bạn
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-400">
+
+            {/* Sub-info: Score & Captured pieces tray */}
+            <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 flex-wrap">
               <span className="text-amber-400 font-mono font-bold">{player?.score ?? 1000} xu</span>
               <span>•</span>
-              <span>{isWhite ? '⚪ Quân Trắng (Đi trước)' : '⚫ Quân Đen (Đi sau)'}</span>
+
+              {/* Captured piece icons */}
+              <div className="flex items-center gap-1">
+                {capturedPieces.map((cap) => (
+                  <div key={cap.type} className="flex items-center text-[10px] text-slate-300">
+                    <div className="w-3.5 h-3.5 inline-block">
+                      <ChessPieceSvg
+                        type={cap.type}
+                        color={isWhite ? 'b' : 'w'}
+                        className="w-full h-full"
+                      />
+                    </div>
+                    {cap.count > 1 && <span className="font-mono text-[9px]">x{cap.count}</span>}
+                  </div>
+                ))}
+
+                {/* Material score difference badge */}
+                {materialAdvantage > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-[9px] font-mono font-bold">
+                    +{materialAdvantage}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Timer countdown badge */}
         <div
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-black border transition ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-black border transition shrink-0 ${
             isLowTime && isCurrentTurn
-              ? 'bg-rose-950/80 text-rose-300 border-rose-700 animate-pulse'
+              ? 'bg-rose-950/80 text-rose-300 border-rose-700 animate-pulse ring-2 ring-rose-500/30'
               : isCurrentTurn
-              ? 'bg-amber-950 text-amber-300 border-amber-600'
+              ? 'bg-amber-950/80 text-amber-300 border-amber-600 ring-1 ring-amber-500/30'
               : 'bg-slate-950 text-slate-400 border-slate-800'
           }`}
         >

@@ -309,6 +309,7 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   isSystem?: boolean;
+  isSpectatorOnly?: boolean;
 }
 
 export interface GameResultRecord {
