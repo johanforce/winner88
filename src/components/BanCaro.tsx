@@ -29,7 +29,6 @@ import {
 import { socket } from '../socket';
 import { KhungChat } from './KhungChat';
 import { RuleGuideModal } from './RuleGuideModal';
-import { useVoiceChat } from '../context/VoiceChatContext';
 import { BOARD_SIZE, isBorderCell, isPlayableCell, caroSound } from '../utils/caroLogic';
 
 interface BanCaroProps {
@@ -64,21 +63,22 @@ export const BanCaro: React.FC<BanCaroProps> = ({
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'CHAT' | 'SPECTATORS'>('CHAT');
-  const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
+  const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages?.length || 0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isGameOverModalDismissed, setIsGameOverModalDismissed] = useState(false);
   const [showMoveNumbers, setShowMoveNumbers] = useState(false);
 
-  const { speakingMap } = useVoiceChat();
-
   // Keep read count updated when chat tab is open
   useEffect(() => {
     if (activeTab === 'CHAT') {
-      setLastReadMessageCount(chatMessages.length);
+      setLastReadMessageCount(chatMessages?.length || 0);
     }
-  }, [activeTab, chatMessages.length]);
+  }, [activeTab, chatMessages?.length]);
 
-  const unreadChatCount = activeTab === 'CHAT' ? 0 : Math.max(0, chatMessages.length - lastReadMessageCount);
+  const unreadChatCount =
+    activeTab === 'CHAT'
+      ? 0
+      : Math.max(0, (chatMessages?.length || 0) - lastReadMessageCount);
 
   // Audio feedback on new move
   useEffect(() => {
@@ -170,8 +170,8 @@ export const BanCaro: React.FC<BanCaroProps> = ({
 
   const handleResetToWaiting = () => {
     socket.emit(
-      'ROOM_RESET_TO_WAITING',
-      { roomCode: roomState.code, requestedByPlayerId: myPlayerId },
+      'PLAYER_RETURN_TO_WAITING',
+      { roomCode: roomState.code, playerId: myPlayerId },
       (res: { success: boolean; message?: string }) => {
         if (!res.success) setActionError(res.message || 'Không thể trở về phòng chờ');
       }
@@ -347,9 +347,6 @@ export const BanCaro: React.FC<BanCaroProps> = ({
                   <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-cyan-900 border border-cyan-400 text-cyan-200 font-black text-[9px] flex items-center justify-center">
                     O
                   </span>
-                  {oPlayer && speakingMap[oPlayer.id] && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full animate-ping" />
-                  )}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1">
@@ -363,7 +360,7 @@ export const BanCaro: React.FC<BanCaroProps> = ({
                     )}
                   </div>
                   <span className="text-[10px] text-slate-400 font-mono block">
-                    {oPlayer ? `${oPlayer.score.toLocaleString()} xu` : 'Ghế 2'}
+                    {oPlayer ? `${(oPlayer.score ?? 0).toLocaleString('vi-VN')} xu` : 'Ghế 2'}
                   </span>
                 </div>
               </div>
@@ -404,9 +401,6 @@ export const BanCaro: React.FC<BanCaroProps> = ({
                   <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-rose-900 border border-rose-400 text-rose-200 font-black text-[9px] flex items-center justify-center">
                     X
                   </span>
-                  {xPlayer && speakingMap[xPlayer.id] && (
-                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full animate-ping" />
-                  )}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1">
@@ -420,7 +414,7 @@ export const BanCaro: React.FC<BanCaroProps> = ({
                     )}
                   </div>
                   <span className="text-[10px] text-slate-400 font-mono block">
-                    {xPlayer ? `${xPlayer.score.toLocaleString()} xu` : 'Ghế 1'}
+                    {xPlayer ? `${(xPlayer.score ?? 0).toLocaleString('vi-VN')} xu` : 'Ghế 1'}
                   </span>
                 </div>
               </div>
@@ -702,14 +696,14 @@ export const BanCaro: React.FC<BanCaroProps> = ({
                   <span>Xin thua</span>
                 </button>
               </>
-            ) : isHost && caro?.winnerPiece ? (
+            ) : caro?.winnerPiece ? (
               <button
                 type="button"
                 onClick={handleResetToWaiting}
                 className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer touch-manipulation"
               >
-                <RotateCcw className="w-4 h-4" />
-                <span>Trở về phòng chờ (Bắt đầu ván mới)</span>
+                <Users className="w-4 h-4" />
+                <span>Quay Về Phòng Chờ</span>
               </button>
             ) : (
               <div className="w-full text-center py-2 text-xs text-slate-400 italic">
@@ -728,7 +722,7 @@ export const BanCaro: React.FC<BanCaroProps> = ({
               id="btn-caro-tab-chat"
               onClick={() => {
                 setActiveTab('CHAT');
-                setLastReadMessageCount(chatMessages.length);
+                setLastReadMessageCount(chatMessages?.length || 0);
               }}
               className={`flex-1 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeTab === 'CHAT'
@@ -756,7 +750,7 @@ export const BanCaro: React.FC<BanCaroProps> = ({
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Khán giả ({spectators.length})</span>
+              <span>Khán giả ({spectators?.length || 0})</span>
             </button>
           </div>
 
@@ -767,7 +761,6 @@ export const BanCaro: React.FC<BanCaroProps> = ({
                 roomCode={roomState.code}
                 playerId={myPlayerId}
                 messages={chatMessages}
-                onReadAll={() => setLastReadMessageCount(chatMessages.length)}
               />
             </div>
           )}
@@ -778,7 +771,7 @@ export const BanCaro: React.FC<BanCaroProps> = ({
               <div className="text-[11px] text-slate-400 mb-2">
                 Danh sách khán giả đang xem ván cờ:
               </div>
-              {spectators.length === 0 ? (
+              {(!spectators || spectators.length === 0) ? (
                 <div className="h-40 flex flex-col items-center justify-center text-slate-500 text-xs">
                   <Users className="w-8 h-8 mb-2 opacity-30" />
                   <span>Chưa có khán giả nào</span>
@@ -796,7 +789,9 @@ export const BanCaro: React.FC<BanCaroProps> = ({
                         <span className="text-[9px] bg-slate-800 text-slate-300 px-1 rounded">BẠN</span>
                       )}
                     </div>
-                    <span className="text-slate-400 font-mono text-[10px]">{sp.score.toLocaleString()} xu</span>
+                    <span className="text-slate-400 font-mono text-[10px]">
+                      {(sp.score ?? 0).toLocaleString('vi-VN')} xu
+                    </span>
                   </div>
                 ))
               )}
@@ -907,15 +902,14 @@ export const BanCaro: React.FC<BanCaroProps> = ({
                 Xem lại thế cờ trên bàn
               </button>
 
-              {isHost && (
-                <button
-                  type="button"
-                  onClick={handleResetToWaiting}
-                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-lg transition cursor-pointer"
-                >
-                  Bắt đầu ván mới (Về phòng chờ)
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleResetToWaiting}
+                className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Users className="w-4 h-4" />
+                <span>Quay Về Phòng Chờ</span>
+              </button>
             </div>
           </div>
         </div>

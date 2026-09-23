@@ -10,6 +10,7 @@ interface KetQuaVanProps {
   isHost: boolean;
   rule: GameRule;
   onPlayAgain: () => void;
+  onReturnToWaiting?: () => void;
   onLeaveRoom: () => void;
   onOpenRules?: () => void;
 }
@@ -20,6 +21,7 @@ export const KetQuaVan: React.FC<KetQuaVanProps> = ({
   isHost,
   rule,
   onPlayAgain,
+  onReturnToWaiting,
   onLeaveRoom,
   onOpenRules,
 }) => {
@@ -182,15 +184,27 @@ export const KetQuaVan: React.FC<KetQuaVanProps> = ({
 
         {/* Action Controls */}
         <div className="p-4 bg-slate-950/80 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onLeaveRoom}
-            id="btn-leave-room-result"
-            className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Rời phòng</span>
-          </button>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {onReturnToWaiting && (
+              <button
+                type="button"
+                onClick={onReturnToWaiting}
+                id="btn-return-waiting-result"
+                className="flex-1 sm:flex-initial min-h-[44px] px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation"
+              >
+                <span>Quay Về Phòng Chờ</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onLeaveRoom}
+              id="btn-leave-room-result"
+              className="flex-1 sm:flex-initial min-h-[44px] px-4 py-2.5 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Rời phòng</span>
+            </button>
+          </div>
 
           {isHost ? (
             <button

@@ -45,12 +45,17 @@ export const KhungChat: React.FC<KhungChatProps> = ({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
 
+  const onReadAllRef = useRef(onReadAll);
+  useEffect(() => {
+    onReadAllRef.current = onReadAll;
+  });
+
   // Notify parent component that messages have been read whenever chat is visible
   useEffect(() => {
     if (isOpen) {
-      onReadAll?.();
+      onReadAllRef.current?.();
     }
-  }, [isOpen, effectiveMessages.length, onReadAll]);
+  }, [isOpen, effectiveMessages.length]);
 
   const handleScroll = () => {
     if (!chatContainerRef.current) return;
@@ -62,7 +67,7 @@ export const KhungChat: React.FC<KhungChatProps> = ({
       if (hasUnreadBelow) {
         setHasUnreadBelow(false);
       }
-      onReadAll?.();
+      onReadAllRef.current?.();
     }
   };
 
@@ -74,7 +79,7 @@ export const KhungChat: React.FC<KhungChatProps> = ({
     });
     setHasUnreadBelow(false);
     isNearBottomRef.current = true;
-    onReadAll?.();
+    onReadAllRef.current?.();
   };
 
   useEffect(() => {

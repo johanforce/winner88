@@ -62,7 +62,12 @@ export class RoomManager {
         xiangqiTimeMode: room.xiangqiTimeMode,
         hostName: host ? host.name : 'Vô danh',
         playerCount: room.players.length,
-        maxPlayers: 4,
+        maxPlayers:
+          room.rule === 'CO_VUA'
+            ? 6
+            : room.rule === 'CO_TUONG' || room.rule === 'CARO' || room.rule === 'BAN_TAU' || room.rule === 'CO_CA_NGUA'
+            ? 8
+            : 4,
         status: room.status === 'PLAYING' ? 'PLAYING' : 'WAITING',
       });
     });
@@ -112,7 +117,11 @@ export class RoomManager {
         ? 'CT'
         : rule === 'CARO'
         ? 'CR'
-        : 'PH';
+        : rule === 'BAN_TAU'
+        ? 'BT'
+        : rule === 'CO_CA_NGUA'
+        ? 'CN'
+        : 'CV';
     let code = '';
     let attempts = 0;
     do {

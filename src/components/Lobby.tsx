@@ -143,7 +143,7 @@ export const Lobby: React.FC<LobbyProps> = ({
               Sảnh Đánh Bài Realtime
             </h1>
             <p className="text-[11px] text-emerald-300/80 font-medium">
-              Tiến Lên Miền Nam &bull; Sâm Lốc
+              Tiến Lên &bull; Sâm Lốc &bull; Cờ Tướng &bull; Cờ Caro &bull; Bắn Tàu &bull; Cờ Cá Ngựa
             </p>
           </div>
         </div>
@@ -319,12 +319,31 @@ export const Lobby: React.FC<LobbyProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFilterRule('PHOM')}
+                  onClick={() => setFilterRule('BAN_TAU')}
                   className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
-                    filterRule === 'PHOM' ? 'bg-purple-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                    filterRule === 'BAN_TAU' ? 'bg-blue-700 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Phỏm
+                  Bắn Tàu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterRule('CO_CA_NGUA')}
+                  className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
+                    filterRule === 'CO_CA_NGUA' ? 'bg-purple-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Cờ Cá Ngựa
+                </button>
+                <button
+                  type="button"
+                  id="btn-filter-co-vua"
+                  onClick={() => setFilterRule('CO_VUA')}
+                  className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
+                    filterRule === 'CO_VUA' ? 'bg-amber-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ♟️ Cờ Vua
                 </button>
               </div>
 
@@ -363,8 +382,12 @@ export const Lobby: React.FC<LobbyProps> = ({
                 const isPlaying = room.status === 'PLAYING';
                 const isCoTuong = room.rule === 'CO_TUONG';
                 const isCaro = room.rule === 'CARO';
-                // For Cờ Tướng and Cờ Caro, spectators can join even if match is in progress as long as room is not full (max 4 or 8)
-                const canJoin = !isFull && (!isPlaying || isCoTuong || isCaro);
+                const isBanTau = room.rule === 'BAN_TAU';
+                const isCoCaNgua = room.rule === 'CO_CA_NGUA';
+                const isCoVua = room.rule === 'CO_VUA';
+                const isBoardGame = isCoTuong || isCaro || isBanTau || isCoCaNgua || isCoVua;
+                // For board games, spectators can join even if match is in progress as long as room is not full (max 6 for chess, 8 for others)
+                const canJoin = !isFull && (!isPlaying || isBoardGame);
 
                 return (
                   <div
@@ -386,6 +409,10 @@ export const Lobby: React.FC<LobbyProps> = ({
                               ? 'bg-red-950 text-red-300 border-red-800'
                               : room.rule === 'CARO'
                               ? 'bg-cyan-950 text-cyan-300 border-cyan-800'
+                              : room.rule === 'BAN_TAU'
+                              ? 'bg-blue-950 text-blue-300 border-blue-800'
+                              : room.rule === 'CO_VUA'
+                              ? 'bg-amber-950 text-amber-300 border-amber-800'
                               : 'bg-purple-950 text-purple-300 border-purple-800'
                           }`}
                         >
@@ -395,8 +422,12 @@ export const Lobby: React.FC<LobbyProps> = ({
                             ? '🔥 Sâm Lốc'
                             : room.rule === 'CARO'
                             ? '⚡ Cờ Caro (5p)'
-                            : room.rule === 'PHOM'
-                            ? '🎴 Phỏm (Tá Lả)'
+                            : room.rule === 'BAN_TAU'
+                            ? '🚢 Bắn Tàu'
+                            : room.rule === 'CO_CA_NGUA'
+                            ? '🎲 Cờ Cá Ngựa'
+                            : room.rule === 'CO_VUA'
+                            ? '♟️ Cờ Vua'
                             : room.xiangqiTimeMode === 'STANDARD'
                             ? '🏆 Cờ Tướng (Tiêu chuẩn)'
                             : '⚡ Cờ Tướng (Chớp 5p)'}
@@ -435,7 +466,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                         onClick={() => onJoinRoom(room.code)}
                         className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold transition touch-manipulation ${
                           canJoin
-                            ? isPlaying && isCoTuong
+                            ? isPlaying && isBoardGame
                               ? 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer active:scale-95'
                               : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95'
                             : 'bg-slate-800 text-slate-500 cursor-not-allowed'
@@ -444,7 +475,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                         {isFull
                           ? 'Đã đầy'
                           : isPlaying
-                          ? isCoTuong
+                          ? isBoardGame
                             ? 'Xem Trực Tiếp 👁️'
                             : 'Đang chơi'
                           : 'Vào Chơi'}
@@ -547,22 +578,66 @@ export const Lobby: React.FC<LobbyProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setSelectedRule('PHOM')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer sm:col-span-2 ${
-                      selectedRule === 'PHOM'
+                    onClick={() => setSelectedRule('BAN_TAU')}
+                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'BAN_TAU'
+                        ? 'bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30 text-white'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mb-2 block">🚢</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-sm block text-white">Bắn Tàu</span>
+                      <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-bold">
+                        HOT
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
+                      Hải chiến 10x10, dàn 5 chiến hạm tiêu diệt đối phương (2 Thuyền trưởng + 6 Khán giả).
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="btn-select-rule-co-ca-ngua"
+                    onClick={() => setSelectedRule('CO_CA_NGUA')}
+                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'CO_CA_NGUA'
                         ? 'bg-purple-950/60 border-purple-500 ring-2 ring-purple-500/30 text-white'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-2xl mb-2 block">🎴</span>
+                    <span className="text-2xl mb-2 block">🎲</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-black text-sm block text-white">Đánh Phỏm (Tá Lả)</span>
+                      <span className="font-black text-sm block text-white">Cờ Cá Ngựa</span>
                       <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-bold">
-                        HOT MỚI
+                        MỚI NHẤT
                       </span>
                     </div>
                     <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      4 người, 9 lá, ăn bài / bốc nọc, cửa sổ chặt bài 5s kịch tính, tính xu phạt ăn cây &amp; Ù. (Tối thiểu 200 xu để vào bàn).
+                      Đua ngựa 2 - 4 người (Đỏ, Xanh, Vàng, Lục) + 4 khách. Gieo 1 hoặc 6 xuất chuồng, đá ngựa, về đích!
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="btn-select-rule-co-vua"
+                    onClick={() => setSelectedRule('CO_VUA')}
+                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'CO_VUA'
+                        ? 'bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/30 text-white'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mb-2 block">♟️</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-sm block text-white">Cờ Vua (Chess)</span>
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold">
+                        AI GEMINI
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
+                      Cờ vua tiêu chuẩn (2 kỳ thủ + 4 khán giả). Sau mỗi 10 nước, bot Gemini tự động phân tích thế trận!
                     </span>
                   </button>
                 </div>
@@ -619,7 +694,7 @@ export const Lobby: React.FC<LobbyProps> = ({
               )}
 
               <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs text-slate-400">
-                &bull; Phòng tối đa <strong>4 người</strong> {selectedRule === 'CO_TUONG' ? '(2 kỳ thủ Đỏ/Đen + 2 slot theo dõi)' : selectedRule === 'CARO' ? '(2 kỳ thủ X/O + slot theo dõi)' : '(4 người chơi)'}.
+                &bull; Phòng tối đa <strong>{selectedRule === 'CO_VUA' ? '6 người (2 kỳ thủ + 4 khán giả)' : selectedRule === 'CO_CA_NGUA' ? '8 người (4 kỳ thủ đua ngựa + 4 khán giả)' : selectedRule === 'CO_TUONG' || selectedRule === 'CARO' || selectedRule === 'BAN_TAU' ? '8 người (2 người thi đấu + 6 khán giả)' : '4 người chơi'}</strong>.
                 <br />
                 &bull; Bạn sẽ tự động trở thành <strong>Chủ phòng (Host)</strong> và có quyền bắt đầu ván đấu.
               </div>

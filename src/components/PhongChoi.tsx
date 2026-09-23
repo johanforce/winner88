@@ -14,16 +14,15 @@ import {
   UserCheck,
   Award,
   MessageSquare,
-  Mic,
-  MicOff,
-  Radio,
-  Headphones,
+  Anchor,
+  Crosshair,
+  Shield,
+  Sparkles,
 } from 'lucide-react';
 import { RoomPublicState, PlayerPublicInfo, ChatMessage } from '../types';
 import { socket } from '../socket';
 import { KhungChat } from './KhungChat';
 import { RuleGuideModal } from './RuleGuideModal';
-import { useVoiceChat } from '../context/VoiceChatContext';
 
 interface PhongChoiProps {
   roomState: RoomPublicState;
@@ -44,8 +43,6 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
   const [mobileTab, setMobileTab] = useState<'SEATS' | 'CHAT'>('SEATS');
   const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
 
-  const { participants: voiceParticipants, speakingMap } = useVoiceChat();
-
   useEffect(() => {
     if (mobileTab === 'CHAT') {
       setLastReadMessageCount(chatMessages.length);
@@ -58,12 +55,14 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
   const isHost = me?.isHost || false;
   const isCoTuong = roomState.rule === 'CO_TUONG';
   const isCaro = roomState.rule === 'CARO';
-  const isPhom = roomState.rule === 'PHOM';
-  const isBoardGame = isCoTuong || isCaro;
+  const isBanTau = roomState.rule === 'BAN_TAU';
+  const isCoCaNgua = roomState.rule === 'CO_CA_NGUA';
+  const isCoVua = roomState.rule === 'CO_VUA';
+  const isBoardGame = isCoTuong || isCaro || isBanTau || isCoCaNgua || isCoVua;
   const activePlayers = roomState.players.filter((p) => p.isConnected);
 
-  // Slots representation strictly indexed by seatIndex (0..3 for cards, 0..7 for Xiangqi and Caro)
-  const totalSlots = isBoardGame ? 8 : 4;
+  // Slots representation: 0..3 for Card games, 0..5 for Chess (2 players + 4 spectators), 0..7 for other Board games
+  const totalSlots = isCoVua ? 6 : isBoardGame ? 8 : 4;
   const seats: (PlayerPublicInfo | null)[] = Array(totalSlots).fill(null);
   roomState.players.forEach((p) => {
     if (typeof p.seatIndex === 'number' && p.seatIndex >= 0 && p.seatIndex < totalSlots) {
@@ -71,12 +70,27 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
     }
   });
 
-  // Start criteria: For board games, both Seat 0 and Seat 1 must be filled. For Phỏm, exactly 4 players.
-  const canStart = isBoardGame
-    ? isHost && !!seats[0]?.isConnected && !!seats[1]?.isConnected
-    : isPhom
-    ? isHost && activePlayers.length === 4
-    : isHost && activePlayers.length >= 2;
+  // Check if all seated playing participants have returned to waiting room
+  const playingSeats = isCoCaNgua
+    ? [seats[0], seats[1], seats[2], seats[3]].filter((s): s is PlayerPublicInfo => !!s && !s.isSpectator)
+    : isCoTuong || isCaro || isBanTau || isCoVua
+    ? [seats[0], seats[1]].filter((s): s is PlayerPublicInfo => !!s && !s.isSpectator)
+    : activePlayers;
+
+  const stillReviewingPlayers = playingSeats.filter(
+    (p) => roomState.status === 'FINISHED' && p.returnedToWaiting === false
+  );
+  const allReturnedToWaiting = stillReviewingPlayers.length === 0;
+
+  // Start criteria
+  const canStart =
+    isHost &&
+    allReturnedToWaiting &&
+    (isCoCaNgua
+      ? playingSeats.filter((p) => p.isConnected).length >= 2
+      : isCoTuong || isCaro || isBanTau || isCoVua
+      ? !!seats[0]?.isConnected && !!seats[1]?.isConnected
+      : activePlayers.length >= 2);
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(roomState.code);
@@ -100,17 +114,18 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
     );
   };
 
-  const handleTransferHost = (targetId: string) => {
+  const handleTransferHost = (targetPlayerId: string) => {
+    setErrorMsg(null);
     socket.emit(
       'ROOM_TRANSFER_HOST',
       {
         roomCode: roomState.code,
-        targetPlayerId: targetId,
+        targetPlayerId,
         requestedByPlayerId: myPlayerId,
       },
       (res: { success: boolean; message?: string }) => {
         if (!res.success) {
-          setErrorMsg(res.message || 'Chuyển host thất bại');
+          setErrorMsg(res.message || 'Không thể chuyển quyền chủ phòng');
         }
       }
     );
@@ -150,8 +165,82 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
     );
   };
 
-  // Seat metadata for Cờ Tướng và Cờ Caro
+  // Seat metadata for Cờ Tướng, Cờ Caro, Bắn Tàu, Cờ Cá Ngựa, and Card Games
   const getSeatConfig = (index: number) => {
+    if (isCoCaNgua) {
+      if (index === 0) {
+        return {
+          title: 'Đội Đỏ (Ghế 1)',
+          badge: '🔴 Ngựa Đỏ',
+          badgeColor: 'bg-rose-950 text-rose-300 border-rose-800',
+          emptyText: 'Chưa có người chơi Đội Đỏ',
+          joinBtnText: 'Chơi Đội Đỏ 🔴',
+        };
+      }
+      if (index === 1) {
+        return {
+          title: 'Đội Xanh Dương (Ghế 2)',
+          badge: '🔵 Ngựa Xanh',
+          badgeColor: 'bg-blue-950 text-blue-300 border-blue-800',
+          emptyText: 'Chưa có người chơi Đội Xanh Dương',
+          joinBtnText: 'Chơi Đội Xanh Dương 🔵',
+        };
+      }
+      if (index === 2) {
+        return {
+          title: 'Đội Vàng (Ghế 3)',
+          badge: '🟡 Ngựa Vàng',
+          badgeColor: 'bg-amber-950 text-amber-300 border-amber-800',
+          emptyText: 'Chưa có người chơi Đội Vàng',
+          joinBtnText: 'Chơi Đội Vàng 🟡',
+        };
+      }
+      if (index === 3) {
+        return {
+          title: 'Đội Xanh Lá (Ghế 4)',
+          badge: '🟢 Ngựa Lá',
+          badgeColor: 'bg-emerald-950 text-emerald-300 border-emerald-800',
+          emptyText: 'Chưa có người chơi Đội Xanh Lá',
+          joinBtnText: 'Chơi Đội Xanh Lá 🟢',
+        };
+      }
+      return {
+        title: `Khán giả #${index - 3}`,
+        badge: '👁️ Khách theo dõi',
+        badgeColor: 'bg-indigo-950 text-indigo-300 border-indigo-800',
+        emptyText: 'Vị trí theo dõi cờ cá ngựa (tối đa 4 người)',
+        joinBtnText: `Ngồi theo dõi #${index - 3} 👁️`,
+      };
+    }
+
+    if (isBanTau) {
+      if (index === 0) {
+        return {
+          title: 'Hạm Đội 1 (Chỉ huy)',
+          badge: '⚓ Chỉ huy 1',
+          badgeColor: 'bg-cyan-950 text-cyan-300 border-cyan-800',
+          emptyText: 'Chưa có Thuyền trưởng Hạm đội 1',
+          joinBtnText: 'Chỉ huy Hạm Đội 1 ⚓',
+        };
+      }
+      if (index === 1) {
+        return {
+          title: 'Hạm Đội 2 (Chỉ huy)',
+          badge: '🚀 Chỉ huy 2',
+          badgeColor: 'bg-rose-950 text-rose-300 border-rose-800',
+          emptyText: 'Chưa có Thuyền trưởng Hạm đội 2',
+          joinBtnText: 'Chỉ huy Hạm Đội 2 🚀',
+        };
+      }
+      return {
+        title: `Khán giả #${index - 1}`,
+        badge: '👁️ Khán giả',
+        badgeColor: 'bg-indigo-950 text-indigo-300 border-indigo-800',
+        emptyText: 'Vị trí quan sát chiến hạm đang trống',
+        joinBtnText: `Quan sát #${index - 1} 👁️`,
+      };
+    }
+
     if (isCaro) {
       if (index === 0) {
         return {
@@ -172,85 +261,256 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
         };
       }
       return {
-        title: `Slot theo dõi #${index - 1} (Khán giả)`,
+        title: `Khán giả #${index - 1}`,
         badge: '👁️ Khán giả',
         badgeColor: 'bg-indigo-950 text-indigo-300 border-indigo-800',
-        emptyText: 'Slot theo dõi đang trống',
+        emptyText: 'Vị trí theo dõi đang trống',
         joinBtnText: `Ngồi theo dõi #${index - 1} 👁️`,
       };
     }
-    if (!isCoTuong) {
+
+    if (isCoTuong) {
+      if (index === 0) {
+        return {
+          title: 'Kỳ thủ Đỏ (Đi trước)',
+          badge: '🔴 Quân Đỏ',
+          badgeColor: 'bg-red-950 text-red-300 border-red-800',
+          emptyText: 'Chưa có kỳ thủ Đỏ (cần 1 người vào vị trí)',
+          joinBtnText: 'Ngồi ghế Đỏ 🔴',
+        };
+      }
+      if (index === 1) {
+        return {
+          title: 'Kỳ thủ Đen (Đi sau)',
+          badge: '⚫ Quân Đen',
+          badgeColor: 'bg-stone-900 text-stone-200 border-stone-700',
+          emptyText: 'Chưa có kỳ thủ Đen (cần 1 người vào vị trí)',
+          joinBtnText: 'Ngồi ghế Đen ⚫',
+        };
+      }
       return {
-        title: `Ghế #${index + 1}`,
-        badge: 'Người chơi',
-        badgeColor: 'bg-emerald-950 text-emerald-300 border-emerald-800',
-        emptyText: 'Đang đợi thêm người vào phòng...',
-        joinBtnText: 'Ngồi ghế này',
+        title: `Khán giả #${index - 1}`,
+        badge: '👁️ Khán giả',
+        badgeColor: 'bg-indigo-950 text-indigo-300 border-indigo-800',
+        emptyText: 'Vị trí theo dõi đang trống',
+        joinBtnText: `Ngồi theo dõi #${index - 1} 👁️`,
       };
     }
-    if (index === 0) {
+
+    if (isCoVua) {
+      if (index === 0) {
+        return {
+          title: 'Kỳ thủ Trắng (Đi trước)',
+          badge: '⚪ Quân Trắng',
+          badgeColor: 'bg-slate-100 text-slate-900 border-slate-300 font-bold',
+          emptyText: 'Chưa có kỳ thủ Trắng (cần 1 người vào vị trí)',
+          joinBtnText: 'Cầm quân Trắng ⚪',
+        };
+      }
+      if (index === 1) {
+        return {
+          title: 'Kỳ thủ Đen (Đi sau)',
+          badge: '⚫ Quân Đen',
+          badgeColor: 'bg-zinc-900 text-zinc-100 border-zinc-700 font-bold',
+          emptyText: 'Chưa có kỳ thủ Đen (cần 1 người vào vị trí)',
+          joinBtnText: 'Cầm quân Đen ⚫',
+        };
+      }
       return {
-        title: 'Kỳ thủ Đỏ (Đi trước)',
-        badge: '🔴 Quân Đỏ',
-        badgeColor: 'bg-red-950 text-red-300 border-red-800',
-        emptyText: 'Chưa có kỳ thủ Đỏ (cần 1 người vào vị trí)',
-        joinBtnText: 'Ngồi ghế Đỏ 🔴',
+        title: `Khán giả #${index - 1}`,
+        badge: '👁️ Khán giả (Có AI)',
+        badgeColor: 'bg-indigo-950 text-indigo-300 border-indigo-800',
+        emptyText: 'Vị trí theo dõi & nhận định AI (tối đa 4 người)',
+        joinBtnText: `Ngồi theo dõi #${index - 1} 👁️`,
       };
     }
-    if (index === 1) {
-      return {
-        title: 'Kỳ thủ Đen (Đi sau)',
-        badge: '⚫ Quân Đen',
-        badgeColor: 'bg-stone-900 text-stone-200 border-stone-700',
-        emptyText: 'Chưa có kỳ thủ Đen (cần 1 người vào vị trí)',
-        joinBtnText: 'Ngồi ghế Đen ⚫',
-      };
-    }
+
     return {
-      title: `Slot theo dõi #${index - 1} (Khán giả)`,
-      badge: '👁️ Khán giả',
-      badgeColor: 'bg-indigo-950 text-indigo-300 border-indigo-800',
-      emptyText: 'Slot theo dõi đang trống',
-      joinBtnText: `Ngồi theo dõi #${index - 1} 👁️`,
+      title: `Ghế #${index + 1}`,
+      badge: 'Người chơi',
+      badgeColor: 'bg-emerald-950 text-emerald-300 border-emerald-800',
+      emptyText: 'Đang đợi thêm người vào phòng...',
+      joinBtnText: 'Ngồi ghế này',
     };
   };
 
+  const renderSeatSlot = (index: number) => {
+    const player = seats[index];
+    const seatConf = getSeatConfig(index);
+    const isMe = player?.id === myPlayerId;
+    const isMyCurrentSeat = me?.seatIndex === index;
+
+    if (player) {
+      return (
+        <div
+          key={`seat-${index}`}
+          className={`relative border rounded-2xl p-4 transition-all shadow-md flex flex-col justify-between ${
+            player.isHost
+              ? 'bg-slate-900/90 border-amber-500/40 shadow-lg shadow-amber-950/20'
+              : 'bg-slate-900/80 border-slate-800'
+          }`}
+        >
+          {/* Host crown badge */}
+          {player.isHost && (
+            <div className="absolute -top-2.5 left-4 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow">
+              <Crown className="w-3 h-3 fill-slate-950" />
+              <span>CHỦ PHÒNG</span>
+            </div>
+          )}
+
+          {/* Role badge top right */}
+          <div className="flex items-center justify-between mb-2">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${seatConf.badgeColor}`}>
+              {seatConf.badge}
+            </span>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                !player.isConnected
+                  ? 'bg-rose-950/60 text-rose-400 border border-rose-800/60'
+                  : roomState.status === 'FINISHED' && player.returnedToWaiting === false
+                  ? 'bg-amber-950/60 text-amber-300 border border-amber-800/60 animate-pulse'
+                  : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
+              }`}
+            >
+              {!player.isConnected
+                ? 'Mất kết nối'
+                : roomState.status === 'FINISHED' && player.returnedToWaiting === false
+                ? '⏳ Đang xem lại ván'
+                : 'Sẵn sàng'}
+            </span>
+          </div>
+
+          {/* Player Info */}
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <span className="text-4xl filter drop-shadow inline-block transition-all rounded-full p-1">
+                  {player.avatar}
+                </span>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-white text-sm sm:text-base">
+                    {player.name}
+                  </span>
+                  {isMe && (
+                    <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded font-bold">
+                      Bạn
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-amber-400 font-semibold mt-0.5">
+                  {player.score} xu
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  {seatConf.title}
+                </div>
+              </div>
+            </div>
+
+            {/* Actions for this player */}
+            <div className="flex flex-col items-end gap-1.5">
+              {isHost && !isMe && player.isConnected && (
+                <button
+                  type="button"
+                  onClick={() => handleTransferHost(player.id)}
+                  title="Chuyển quyền chủ phòng"
+                  className="px-2 py-1 bg-slate-800 hover:bg-amber-950/80 hover:text-amber-300 text-slate-400 text-[10px] font-semibold rounded-lg border border-slate-700 transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Crown className="w-3 h-3 text-amber-400" />
+                  <span>Trao quyền</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Empty Slot
+    return (
+      <div
+        key={`empty-${index}`}
+        className="border-2 border-dashed border-slate-800/80 rounded-2xl p-4 min-h-[130px] flex flex-col items-center justify-center text-center bg-slate-950/20 hover:border-slate-700 transition"
+      >
+        <div className="flex items-center justify-between w-full mb-1">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${seatConf.badgeColor}`}>
+            {seatConf.badge}
+          </span>
+          <span className="text-[10px] text-slate-500 font-semibold">Trống</span>
+        </div>
+
+        <span className="text-xs font-bold text-slate-300 mt-1">
+          {seatConf.title}
+        </span>
+        <p className="text-[11px] text-slate-500 mt-0.5 mb-2">
+          {seatConf.emptyText}
+        </p>
+
+        {/* Switch to this seat button */}
+        {!isMyCurrentSeat && (
+          <button
+            type="button"
+            onClick={() => handleSwitchSeat(index)}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <UserCheck className="w-3.5 h-3.5" />
+            <span>{seatConf.joinBtnText}</span>
+          </button>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-950 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
       {/* Top Navigation Bar */}
-      <header className="border-b border-emerald-900/40 bg-slate-950/70 backdrop-blur-md px-4 py-3 flex items-center justify-between">
+      <header className="bg-slate-950/90 border-b border-slate-800/80 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-xl">
-            <span className="text-xs text-slate-400 font-medium">Mã phòng:</span>
-            <span className="font-extrabold text-amber-400 tracking-wider text-base">
-              {roomState.code}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Phòng:
             </span>
             <button
               onClick={handleCopyCode}
               id="btn-copy-room-code"
-              className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white transition cursor-pointer"
+              className="px-3 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl font-mono text-base sm:text-lg font-black text-amber-400 tracking-wider flex items-center gap-2 transition cursor-pointer group"
               title="Sao chép mã phòng"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{roomState.code}</span>
+              {copied ? (
+                <Check className="w-4 h-4 text-emerald-400" />
+              ) : (
+                <Copy className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition" />
+              )}
             </button>
           </div>
 
           <div
-            className={`text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 ${
+            className={`hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${
               roomState.rule === 'TIEN_LEN_MIEN_NAM'
                 ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300'
                 : roomState.rule === 'SAM_LOC'
                 ? 'bg-amber-950/60 border-amber-700 text-amber-300'
                 : roomState.rule === 'CO_TUONG'
                 ? 'bg-red-950/60 border-red-700 text-red-300'
-                : 'bg-cyan-950/60 border-cyan-700 text-cyan-300'
+                : roomState.rule === 'CARO'
+                ? 'bg-cyan-950/60 border-cyan-700 text-cyan-300'
+                : roomState.rule === 'BAN_TAU'
+                ? 'bg-blue-950/60 border-blue-700 text-blue-300'
+                : roomState.rule === 'CO_VUA'
+                ? 'bg-amber-950/60 border-amber-600 text-amber-300'
+                : 'bg-purple-950/60 border-purple-700 text-purple-300'
             }`}
           >
             {roomState.rule === 'TIEN_LEN_MIEN_NAM' && '♠ Tiến Lên Miền Nam'}
             {roomState.rule === 'SAM_LOC' && '🔥 Sâm Lốc (10 lá)'}
-            {roomState.rule === 'CO_TUONG' && '🏆 Cờ Tướng Cờ Chớp (5 phút)'}
-            {roomState.rule === 'CARO' && '⚡ Cờ Caro (5 phút/bên - Ăn 5 chặn 2 đầu win)'}
-            {roomState.rule === 'PHOM' && '🎴 Phỏm (Tá Lả - Chuẩn 4 người)'}
+            {roomState.rule === 'CO_TUONG' && '🏆 Cờ Tướng (2 kỳ thủ + 6 khách)'}
+            {roomState.rule === 'CARO' && '⚡ Cờ Caro (2 kỳ thủ + 6 khách)'}
+            {roomState.rule === 'BAN_TAU' && '🚢 Bắn Tàu (2 chỉ huy + 6 khách)'}
+            {roomState.rule === 'CO_CA_NGUA' && '🎲 Cờ Cá Ngựa (2-4 kỳ thủ + 4 khách)'}
+            {roomState.rule === 'CO_VUA' && '♟️ Cờ Vua (2 kỳ thủ + 4 khách)'}
           </div>
         </div>
 
@@ -275,63 +535,65 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 flex flex-col lg:flex-row items-start gap-4 sm:gap-6">
-        {/* Mobile Tab Switcher */}
-        <div className="w-full flex lg:hidden bg-slate-900/90 border border-slate-800 p-1 rounded-2xl text-xs font-bold shrink-0">
-          <button
-            type="button"
-            onClick={() => setMobileTab('SEATS')}
-            className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation ${
-              mobileTab === 'SEATS' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Phòng Chờ ({roomState.players.length}/{totalSlots})</span>
-          </button>
-          <button
-            type="button"
-            id="btn-waiting-tab-chat"
-            onClick={() => {
-              setMobileTab('CHAT');
-              setLastReadMessageCount(chatMessages.length);
-            }}
-            className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation ${
-              mobileTab === 'CHAT' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>Trò Chuyện</span>
-            {unreadChatCount > 0 && (
-              <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full animate-pulse shadow">
-                +{unreadChatCount}
-              </span>
-            )}
-          </button>
-        </div>
+      {/* Mobile Tab Toggle */}
+      <div className="lg:hidden flex border-b border-slate-800 bg-slate-950/80 px-4 pt-2">
+        <button
+          onClick={() => setMobileTab('SEATS')}
+          className={`flex-1 py-2 text-xs font-bold border-b-2 transition flex items-center justify-center gap-2 ${
+            mobileTab === 'SEATS'
+              ? 'border-amber-400 text-amber-300'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Vị Trí ({roomState.players.length}/{totalSlots})</span>
+        </button>
+        <button
+          onClick={() => setMobileTab('CHAT')}
+          className={`flex-1 py-2 text-xs font-bold border-b-2 transition flex items-center justify-center gap-2 relative ${
+            mobileTab === 'CHAT'
+              ? 'border-amber-400 text-amber-300'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span>Trò Chuyện</span>
+          {unreadChatCount > 0 && (
+            <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-black animate-pulse">
+              {unreadChatCount}
+            </span>
+          )}
+        </button>
+      </div>
 
-        {/* Left Side: Waiting Room Slots & Controls */}
-        <div className={`flex-1 w-full flex-col space-y-4 sm:space-y-5 ${mobileTab === 'SEATS' ? 'flex' : 'hidden lg:flex'}`}>
+      {/* Main Content Layout */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
+        {/* Left Side: Room Info & Slots */}
+        <div className={`flex-1 flex flex-col gap-5 ${mobileTab === 'SEATS' ? 'block' : 'hidden lg:flex'}`}>
           {/* Instructions banner */}
           <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl flex items-center justify-between gap-4">
             <div>
               <h2 className="text-white font-extrabold text-base flex items-center gap-2">
                 <Users className="w-5 h-5 text-emerald-400" />
-                {isCaro
-                  ? 'Phòng Chờ Cờ Caro (2 Kỳ Thủ + Slot Khán Giả)'
+                {isCoVua
+                  ? `Phòng Cờ Vua (${roomState.players.length}/6 - 2 Kỳ thủ + 4 Khán giả)`
+                  : isBanTau
+                  ? `Phòng Chiến Hạm Bắn Tàu (${roomState.players.length}/8 - 2 Chỉ huy + 6 Khán giả)`
+                  : isCaro
+                  ? `Phòng Cờ Caro (${roomState.players.length}/8 - 2 Kỳ thủ + 6 Khán giả)`
                   : isCoTuong
-                  ? 'Phòng Chờ Cờ Tướng (2 Kỳ Thủ + 2 Khán Giả)'
-                  : isPhom
-                  ? 'Phòng Chờ Đánh Phỏm (Chuẩn 4 Người Chơi)'
-                  : `Phòng chờ (${roomState.players.length}/4 người chơi)`}
+                  ? `Phòng Cờ Tướng (${roomState.players.length}/8 - 2 Kỳ thủ + 6 Khán giả)`
+                  : `Phòng Chờ (${roomState.players.length}/4 người chơi)`}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                {isCaro
+                {isCoVua
+                  ? 'Cần đủ 2 kỳ thủ ở ghế Trắng và Đen để bắt đầu (10 phút/bên). Tối đa 4 khán giả. Cứ sau mỗi 10 nước đi, bot Gemini sẽ tự động phân tích thế trận trong khung chat!'
+                  : isBanTau
+                  ? 'Cần 2 Thuyền trưởng ở Hạm đội 1 và Hạm đội 2 để khai chiến. Tối đa 6 khách theo dõi chiến trận!'
+                  : isCaro
                   ? 'Cần đủ 2 kỳ thủ ở ghế X và O để bắt đầu. Luật: Ăn 5 chặn 2 đầu vẫn THẮNG. Thời gian 5 phút/bên!'
                   : isCoTuong
                   ? 'Cần đủ 2 kỳ thủ ở ghế Đỏ và Đen để bắt đầu trận đấu. Chủ phòng có thể chọn thể thức Tiêu Chuẩn hoặc Cờ Chớp.'
-                  : isPhom
-                  ? 'Game Phỏm yêu cầu đúng 4 người chơi và mỗi người có tối thiểu 200 xu để bắt đầu ván!'
                   : `Cần tối thiểu 2 người để bắt đầu ván. Chia sẻ mã ${roomState.code} để mời bạn bè cùng vào sòng!`}
               </p>
             </div>
@@ -345,45 +607,48 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
             </button>
           </div>
 
-          {/* Phỏm Information Banner */}
-          {isPhom && (
-            <div className="bg-purple-950/40 border border-purple-800/60 p-4 rounded-2xl shadow-sm">
+          {/* Chess AI Commentary Feature Card */}
+          {isCoVua && (
+            <div className="bg-gradient-to-r from-indigo-950/60 via-purple-950/40 to-slate-900 border border-indigo-800/60 p-4 rounded-2xl shadow-sm">
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-purple-300">
-                  Luật Chơi Phỏm (Tá Lả)
+                <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+                  Phân Tích Thế Trận Tự Động (AI Gemini)
                 </span>
-                <span className="text-[10px] bg-purple-900/60 text-purple-200 border border-purple-700 px-1.5 py-0.5 rounded font-mono font-bold">
-                  Bắt buộc 4 người • Tối thiểu 200 xu
+                <span className="text-[10px] bg-indigo-900/60 text-indigo-200 border border-indigo-700 px-1.5 py-0.5 rounded font-mono font-bold">
+                  2 Kỳ thủ • 4 Khán giả
                 </span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                🎴 Mỗi người 9 lá, 1 lá mở màn. Lượt gồm 2 bước: <strong>(1) Bốc nọc hoặc Ăn bài</strong> rác của người trước (ghép hạ phỏm), <strong>(2) Đánh 1 lá rác</strong>.
-                Đặc biệt: Khi có người đánh bài, mọi người có <strong>5 giây để CHẶT bài</strong> nếu có 2 lá tạo phỏm! Ván kết thúc khi có người Ù (hoặc Ù trắng x2 xu) hoặc hết nọc.
+                🤖 Trong suốt ván đấu, hệ thống gửi toàn bộ nhật ký nước đi cho <strong>Gemini</strong>.
+                Cứ <strong>sau mỗi 10 nước đi</strong>, bot AI sẽ xuất hiện trong khung chat để phân tích tổng quan
+                cục diện Đen và Trắng cho khán giả và người chơi cùng theo dõi!
               </p>
             </div>
           )}
 
-          {/* Cờ Caro Information Banner */}
-          {isCaro && (
+          {/* Battleship Information Banner */}
+          {isBanTau && (
             <div className="bg-cyan-950/40 border border-cyan-800/60 p-4 rounded-2xl shadow-sm">
               <div className="flex items-center gap-2 mb-1.5">
+                <Crosshair className="w-4 h-4 text-cyan-400" />
                 <span className="text-xs font-bold uppercase tracking-wider text-cyan-300">
-                  Thể Thức Cờ Caro (5 Phút Blitz)
+                  Hải Chiến Bắn Tàu (Battleship 10x10)
                 </span>
                 <span className="text-[10px] bg-cyan-900/60 text-cyan-200 border border-cyan-700 px-1.5 py-0.5 rounded font-mono font-bold">
-                  Ăn 5 chặn 2 đầu vẫn THẮNG
+                  2 Chỉ huy • 6 Khán giả
                 </span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                ⚡ Mỗi bên có <strong>5 phút</strong> tổng thời gian suy nghĩ. Ai hết giờ trước sẽ bị xử thua (Timeout).
-                Tạo chuỗi 5 quân liên tiếp hàng ngang, dọc hoặc chéo (kể cả bị chặn 2 đầu) sẽ giành chiến thắng ngay lập tức!
+                🚢 Mỗi bên sở hữu hạm đội gồm 5 chiến hạm: <strong>Tàu sân bay (5 ô)</strong>, <strong>Thiết giáp hạm (4 ô)</strong>, <strong>Tàu tuần dương (3 ô)</strong>, <strong>Tàu ngầm (3 ô)</strong>, <strong>Tàu khu trục (2 ô)</strong>.
+                Bố trí tàu bí mật trên lưới 10x10. Khi bắt đầu, lần lượt xả đạn bắn phá tọa độ đối phương. Bên nào đánh chìm toàn bộ hạm đội đối phương trước sẽ giành chiến thắng!
               </p>
             </div>
           )}
 
-          {/* Cờ Tướng Time Mode Configuration Banner */}
+          {/* Cờ Tướng Time Mode Selector */}
           {isCoTuong && (
-            <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl shadow-sm">
+            <div className="bg-stone-900/90 border border-amber-700/50 p-4 rounded-2xl shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
@@ -455,182 +720,106 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
             </div>
           )}
 
-          {/* 4 Slots Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {seats.map((player, index) => {
-              const seatConf = getSeatConfig(index);
-              const isMe = player?.id === myPlayerId;
-              const isMyCurrentSeat = me?.seatIndex === index;
-
-              if (player) {
-                return (
-                  <div
-                    key={player.id}
-                    className={`relative p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between min-h-[150px] ${
-                      player.isHost
-                        ? 'bg-slate-900/90 border-amber-500/40 shadow-lg shadow-amber-950/20'
-                        : 'bg-slate-900/80 border-slate-800'
-                    }`}
-                  >
-                    {/* Host crown badge */}
-                    {player.isHost && (
-                      <div className="absolute -top-2.5 left-4 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow">
-                        <Crown className="w-3 h-3 fill-slate-950" />
-                        <span>CHỦ PHÒNG</span>
-                      </div>
-                    )}
-
-                    {/* Role badge top right */}
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${seatConf.badgeColor}`}>
-                        {seatConf.badge}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          player.isConnected
-                            ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
-                            : 'bg-rose-950/60 text-rose-400 border border-rose-800/60'
-                        }`}
-                      >
-                        {player.isConnected ? 'Sẵn sàng' : 'Mất kết nối'}
-                      </span>
-                    </div>
-
-                    {/* Player Info */}
-                    {(() => {
-                      const voiceUser = voiceParticipants.find((vp) => vp.playerId === player.id);
-                      const isSpeaking = speakingMap[player.id] || voiceUser?.isSpeaking;
-
-                      return (
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <span
-                                className={`text-4xl filter drop-shadow inline-block transition-all rounded-full p-1 ${
-                                  isSpeaking
-                                    ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-slate-900 animate-pulse bg-emerald-500/20'
-                                    : ''
-                                }`}
-                              >
-                                {player.avatar}
-                              </span>
-
-                              {/* Voice badge */}
-                              {voiceUser && (
-                                <div
-                                  className={`absolute -bottom-1 -right-1 p-1 rounded-full border shadow-sm ${
-                                    voiceUser.hasMic === false
-                                      ? 'bg-sky-950 border-sky-700 text-sky-400'
-                                      : voiceUser.isMuted
-                                      ? 'bg-slate-900 border-slate-700 text-slate-400'
-                                      : isSpeaking
-                                      ? 'bg-emerald-500 border-emerald-300 text-slate-950 animate-bounce'
-                                      : 'bg-emerald-950 border-emerald-700 text-emerald-400'
-                                  }`}
-                                  title={
-                                    voiceUser.hasMic === false
-                                      ? 'Đang nghe phòng 🎧'
-                                      : voiceUser.isMuted
-                                      ? 'Đã tắt mic'
-                                      : isSpeaking
-                                      ? 'Đang nói...'
-                                      : 'Đang bật mic'
-                                  }
-                                >
-                                  {voiceUser.hasMic === false ? (
-                                    <Headphones className="w-3 h-3" />
-                                  ) : voiceUser.isMuted ? (
-                                    <MicOff className="w-3 h-3" />
-                                  ) : isSpeaking ? (
-                                    <Radio className="w-3 h-3" />
-                                  ) : (
-                                    <Mic className="w-3 h-3" />
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-white text-sm sm:text-base">
-                                  {player.name}
-                                </span>
-                                {isMe && (
-                                  <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded font-bold">
-                                    Bạn
-                                  </span>
-                                )}
-                                {isSpeaking && (
-                                  <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold animate-pulse">
-                                    Đang nói 🎙️
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-amber-400 font-semibold mt-0.5">
-                                {player.score} xu
-                              </div>
-                              <div className="text-[11px] text-slate-400 mt-0.5">
-                                {seatConf.title}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Action buttons on card */}
-                    <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                      {/* Host transfer action */}
-                      {isHost && !player.isHost && player.isConnected && (
-                        <button
-                          type="button"
-                          onClick={() => handleTransferHost(player.id)}
-                          className="text-[11px] text-slate-400 hover:text-amber-300 flex items-center gap-1 hover:underline transition cursor-pointer"
-                        >
-                          <ArrowRightLeft className="w-3 h-3" />
-                          <span>Chuyển chủ phòng</span>
-                        </button>
-                      )}
-                    </div>
+          {/* Main Slots Section */}
+          {isCoCaNgua ? (
+            <div className="space-y-4">
+              {/* 4 Main Player Slots (Đỏ, Xanh Dương, Vàng, Xanh Lá) */}
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Crosshair className="w-4 h-4 text-amber-400" />
+                    <span>4 Vị Trí Đua Ngựa (2 đến 4 Người Chơi)</span>
                   </div>
-                );
-              }
-
-              // Empty Slot
-              return (
-                <div
-                  key={`empty-${index}`}
-                  className="border-2 border-dashed border-slate-800/80 rounded-2xl p-5 min-h-[150px] flex flex-col items-center justify-center text-center bg-slate-950/20 hover:border-slate-700 transition"
-                >
-                  <div className="flex items-center justify-between w-full mb-1">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${seatConf.badgeColor}`}>
-                      {seatConf.badge}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-semibold">Trống</span>
-                  </div>
-
-                  <span className="text-xs font-bold text-slate-300 mt-1">
-                    {seatConf.title}
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {seats.slice(0, 4).filter((s) => !!s && !s.isSpectator).length}/4 kỳ thủ
                   </span>
-                  <p className="text-[11px] text-slate-500 mt-0.5 mb-3">
-                    {seatConf.emptyText}
-                  </p>
-
-                  {/* Switch to this seat button */}
-                  {!isMyCurrentSeat && (
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchSeat(index)}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
-                    >
-                      <UserCheck className="w-3.5 h-3.5" />
-                      <span>{seatConf.joinBtnText}</span>
-                    </button>
-                  )}
                 </div>
-              );
-            })}
-          </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[0, 1, 2, 3].map((seatIdx) => renderSeatSlot(seatIdx))}
+                </div>
+              </div>
+
+              {/* 4 Spectator Slots */}
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-indigo-400" />
+                    <span>Khán Giả Theo Dõi (Tối đa 4 khách xem)</span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {seats.slice(4, 8).filter((s) => !!s).length}/4 khán giả
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[4, 5, 6, 7].map((seatIdx) => renderSeatSlot(seatIdx))}
+                </div>
+              </div>
+            </div>
+          ) : isCoVua ? (
+            <div className="space-y-4">
+              {/* 2 Main Player Duel Slots (Trắng & Đen) */}
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
+                  <Crosshair className="w-4 h-4 text-amber-400" />
+                  <span>2 Vị Trí Kỳ Thủ Cờ Vua</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {renderSeatSlot(0)}
+                  {renderSeatSlot(1)}
+                </div>
+              </div>
+
+              {/* 4 Spectator Slots for Chess */}
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-indigo-400" />
+                    <span>4 Khán Giả Theo Dõi &amp; Nhận Định AI</span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {seats.slice(2, 6).filter((s) => !!s).length}/4 khán giả
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[2, 3, 4, 5].map((seatIdx) => renderSeatSlot(seatIdx))}
+                </div>
+              </div>
+            </div>
+          ) : isBoardGame ? (
+            <div className="space-y-4">
+              {/* 2 Main Player Duel Slots */}
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
+                  <Crosshair className="w-4 h-4 text-amber-400" />
+                  <span>2 Vị Trí Tranh Đấu Chính</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {renderSeatSlot(0)}
+                  {renderSeatSlot(1)}
+                </div>
+              </div>
+
+              {/* 6 Spectator Slots */}
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-indigo-400" />
+                    <span>Khán Giả Theo Dõi (Tối đa 6 khách xem)</span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {seats.slice(2).filter((s) => !!s).length}/6 khán giả
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[2, 3, 4, 5, 6, 7].map((seatIdx) => renderSeatSlot(seatIdx))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[0, 1, 2, 3].map((seatIdx) => renderSeatSlot(seatIdx))}
+            </div>
+          )}
 
           {/* Error Message if any */}
           {errorMsg && (
@@ -643,30 +832,44 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
           <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-xs text-slate-400 text-center sm:text-left">
               {isHost ? (
-                !canStart ? (
+                !allReturnedToWaiting ? (
                   <span className="text-amber-400 font-medium">
-                    {isCaro
+                    ⏳ Đang chờ người chơi quay về phòng chờ: {stillReviewingPlayers.map((p) => p.name).join(', ')}
+                  </span>
+                ) : !canStart ? (
+                  <span className="text-amber-400 font-medium">
+                    {isCoVua
+                      ? '⏳ Cần có đủ 2 kỳ thủ ở ghế Trắng và ghế Đen để bắt đầu trận cờ vua 10 phút.'
+                      : isCoCaNgua
+                      ? '⏳ Cần có ít nhất 2 người chơi ở các ghế đua ngựa để bắt đầu.'
+                      : isBanTau
+                      ? '⏳ Cần có đủ 2 Thuyền trưởng ở Hạm đội 1 và Hạm đội 2 để khai hỏa.'
+                      : isCaro
                       ? '⏳ Cần có đủ 2 kỳ thủ ở ghế X và ghế O để bắt đầu trận cờ Caro 5 phút.'
                       : isCoTuong
                       ? '⏳ Cần có đủ 2 kỳ thủ ở ghế Đỏ và ghế Đen để bắt đầu trận cờ chớp.'
-                      : isPhom
-                      ? '⏳ Cần có đủ 4 người chơi để bắt đầu ván Phỏm (hiện có ' + roomState.players.length + '/4).'
                       : '⏳ Cần tối thiểu 2 người chơi để bắt đầu ván bài.'}
                   </span>
                 ) : (
                   <span className="text-emerald-400 font-medium">
-                    {isCaro
+                    {isCoVua
+                      ? '✅ Đã đủ 2 kỳ thủ Trắng và Đen! Bạn có thể bấm bắt đầu ván cờ vua ngay!'
+                      : isCoCaNgua
+                      ? '✅ Đã đủ kỳ thủ đua ngựa! Bạn có thể bấm bắt đầu ván cờ cá ngựa ngay!'
+                      : isBanTau
+                      ? '✅ Đã sẵn sàng 2 Hạm đội! Thuyền trưởng có thể bấm bắt đầu hải chiến ngay!'
+                      : isCaro
                       ? '✅ Đã đủ 2 kỳ thủ X và O. Bạn có thể bấm bắt đầu trận đấu ngay!'
                       : isCoTuong
                       ? '✅ Đã đủ 2 kỳ thủ Đỏ và Đen. Bạn có thể bấm bắt đầu trận đấu ngay!'
-                      : isPhom
-                      ? '✅ Đã đủ 4 người chơi! Bạn có thể bấm bắt đầu ván Phỏm ngay!'
                       : '✅ Đã đủ điều kiện. Bạn có thể bắt đầu ván chơi bất cứ lúc nào!'}
                   </span>
                 )
               ) : (
                 <span className="italic text-slate-400">
-                  ⏳ Đang chờ chủ phòng bấm bắt đầu trận đấu...
+                  {!allReturnedToWaiting
+                    ? `⏳ Đang chờ người chơi (${stillReviewingPlayers.map((p) => p.name).join(', ')}) ra phòng chờ...`
+                    : '⏳ Đang chờ chủ phòng bấm bắt đầu trận đấu...'}
                 </span>
               )}
             </div>
@@ -684,29 +887,37 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                 }`}
               >
                 <Play className="w-4 h-4 fill-current" />
-                <span>{isCaro ? 'Bắt Đầu Trận Cờ Caro' : isCoTuong ? 'Bắt Đầu Trận Cờ Chớp' : 'Bắt Đầu Ván Chơi'}</span>
+                <span>
+                  {isCoCaNgua
+                    ? 'Bắt Đầu Cờ Cá Ngựa'
+                    : isBanTau
+                    ? 'Bắt Đầu Hải Chiến'
+                    : isCaro
+                    ? 'Bắt Đầu Trận Cờ Caro'
+                    : isCoTuong
+                    ? 'Bắt Đầu Trận Cờ Chớp'
+                    : 'Bắt Đầu Ván Chơi'}
+                </span>
               </button>
             )}
           </div>
         </div>
 
         {/* Right Side: Chat */}
-        <div className={`w-full lg:w-80 xl:w-[340px] shrink-0 h-[480px] lg:h-[500px] ${mobileTab === 'CHAT' ? 'block' : 'hidden lg:block'}`}>
+        <div className={`w-full lg:w-80 xl:w-[340px] shrink-0 h-[480px] lg:h-[520px] ${mobileTab === 'CHAT' ? 'block' : 'hidden lg:block'}`}>
           <KhungChat
+            chatMessages={chatMessages}
+            myPlayerId={myPlayerId}
             roomCode={roomState.code}
-            playerId={myPlayerId}
-            messages={chatMessages}
-            isOpen={true}
-            onReadAll={() => setLastReadMessageCount(chatMessages.length)}
           />
         </div>
       </main>
 
-      {/* Rule modal */}
+      {/* Rule Guide Modal */}
       <RuleGuideModal
         isOpen={isRuleModalOpen}
         onClose={() => setIsRuleModalOpen(false)}
-        defaultRule={roomState.rule}
+        initialRule={roomState.rule}
       />
     </div>
   );

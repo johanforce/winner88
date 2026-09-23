@@ -1,50 +1,167 @@
 export type Suit = 'SPADE' | 'CLUB' | 'DIAMOND' | 'HEART';
 
-export type GameRule = 'TIEN_LEN_MIEN_NAM' | 'SAM_LOC' | 'CO_TUONG' | 'CARO' | 'PHOM';
+export type GameRule = 'TIEN_LEN_MIEN_NAM' | 'SAM_LOC' | 'CO_TUONG' | 'CARO' | 'BAN_TAU' | 'CO_CA_NGUA' | 'CO_VUA';
 
-// --- PHỎM (TÁ LẢ) TYPES ---
-export interface PhomMeld {
-  id: string;
+// --- CỜ VUA (CHESS) TYPES ---
+export type ChessSide = 'WHITE' | 'BLACK';
+
+export interface ChessMoveRecord {
+  moveNumber: number; // 1, 2, 3...
+  turn: ChessSide;
+  from: string; // 'e2'
+  to: string; // 'e4'
+  piece: string; // 'p', 'n', 'b', 'r', 'q', 'k'
+  captured?: string;
+  promotion?: string;
+  san: string; // 'e4', 'Nf3', 'O-O', 'Qxf7#'
+  fenAfter: string;
+  isCheck: boolean;
+  isCheckmate: boolean;
+  timestamp: number;
+}
+
+export interface ChessState {
+  fen: string;
+  pgn: string;
+  turn: ChessSide;
+  whitePlayerId: string | null;
+  blackPlayerId: string | null;
+  spectatorIds: string[];
+  whiteTimeRemaining: number; // 600s
+  blackTimeRemaining: number; // 600s
+  initialTime: number; // 600
+  lastMove: ChessMoveRecord | null;
+  moveHistory: ChessMoveRecord[];
+  isCheck: boolean;
+  isCheckmate: boolean;
+  isStalemate: boolean;
+  isDraw: boolean;
+  winnerSide: ChessSide | 'DRAW' | null;
+  winReason?: 'CHECKMATE' | 'TIMEOUT' | 'RESIGN' | 'STALEMATE' | 'THREEFOLD' | 'INSUFFICIENT_MATERIAL' | 'FIFTY_MOVES' | 'AGREED_DRAW';
+  drawOfferFrom?: ChessSide | null;
+  lastAiAnalysis?: {
+    moveIndex: number;
+    text: string;
+    timestamp: number;
+  } | null;
+}
+
+// --- CỜ CÁ NGỰA (LUDO / HORSE RACING) TYPES ---
+export type CaNguaColor = 'RED' | 'BLUE' | 'YELLOW' | 'GREEN';
+export type CaNguaHorseState = 'STABLE' | 'ON_TRACK' | 'IN_BARN' | 'FINISHED';
+
+export interface CaNguaHorse {
+  id: number; // 0..3 (4 horses per player)
+  color: CaNguaColor;
+  playerId: string;
+  horseIndex: number;
+  step: number; // -1: in stable, 0..55: on track (relative to start cell), 56..61: in home barn (1..6)
+  state: CaNguaHorseState;
+  trackPosition: number; // 0..55 (absolute position on the track)
+  barnStep: number; // 0..5
+  isFinished: boolean;
+}
+
+export interface CaNguaPlayerState {
   playerId: string;
   playerName: string;
-  type: 'SAME_RANK' | 'STRAIGHT';
-  cards: Card[];
-  eatenCardId?: string;
+  seatIndex: number;
+  color: CaNguaColor;
+  horses: CaNguaHorse[];
+  score: number;
 }
 
-export interface PhomInterceptWindow {
-  card: Card;
-  discardedByPlayerId: string;
-  discardedByPlayerName: string;
-  expiresAt: number;
-  secondsRemaining: number;
+export interface CoCaNguaState {
+  players: CaNguaPlayerState[];
+  currentTurnColor: CaNguaColor;
+  currentTurnPlayerId: string;
+  turnTimeRemaining: number; // 30s
+  phase: 'ROLLING' | 'SELECTING_HORSE' | 'IDLE' | 'FINISHED';
+  diceValue: number | null; // 1..6
+  lastDiceValue: number | null;
+  diceRollHistory: number[];
+  isRolling: boolean;
+  consecutiveSixes: number; // max 3
+  canRoll: boolean;
+  canSelectHorse: boolean;
+  movableHorseIds: number[];
+  spectatorIds: string[];
+  winnerColor: CaNguaColor | null;
+  winnerPlayerId: string | null;
+  ranks: { playerId: string; color: CaNguaColor; rank: number }[];
+  lastActionText?: string;
+  lastActionMessage?: string;
+  lastKickedHorse?: {
+    horseIndex: number;
+    color: CaNguaColor;
+    trackPosition: number;
+    kickerColor: CaNguaColor;
+  } | null;
+  horses: CaNguaHorse[];
 }
 
-export interface PhomPenaltyInfo {
+// --- BẮN TÀU (BATTLESHIP) TYPES ---
+export type ShipOrientation = 'HORIZONTAL' | 'VERTICAL';
+
+export interface ShipDefinition {
+  id: string; // 'carrier' | 'battleship' | 'cruiser' | 'submarine' | 'destroyer'
+  name: string;
+  size: number;
+  color: string;
+  icon: string;
+}
+
+export interface PlacedShip {
+  shipId: string;
+  name: string;
+  size: number;
+  originX: number; // 0..9
+  originY: number; // 0..9
+  orientation: ShipOrientation;
+  cells: { x: number; y: number }[];
+  hits: number;
+  isSunk: boolean;
+}
+
+export interface ShotRecord {
+  x: number; // 0..9
+  y: number; // 0..9
+  shooterId: string;
+  targetPlayerId: string;
+  isHit: boolean;
+  shipSunkName?: string | null;
+  timestamp: number;
+  shotNumber: number;
+}
+
+export interface BanTauPlayerState {
   playerId: string;
   playerName: string;
-  unmeldedCards: Card[];
-  unmeldedPoints: number;
-  chattedCount: number;
-  chattedCards: Card[];
-  penaltyCoins: number;
-  actualPaidCoins: number;
+  fleetPlaced: boolean;
+  isReady: boolean;
+  totalHitsDealt: number; // total successful hits on opponent (out of 17)
+  shotsFired: { x: number; y: number; isHit: boolean; shipSunkName?: string | null }[];
+  shotsReceived: { x: number; y: number; isHit: boolean }[];
+  sunkShips: { shipId: string; name: string; size: number; cells: { x: number; y: number }[] }[];
+  revealedShips?: PlacedShip[]; // populated when FINISHED or for the player themselves
 }
 
-export interface PhomState {
-  deckCount: number;
-  openingDiscardCard: Card | null;
-  discardPile: { card: Card; discardedByPlayerId: string; discardedByPlayerName: string }[];
-  melds: PhomMeld[];
-  turnStep: 'DRAW_OR_EAT' | 'DISCARD';
-  eatenCardThisTurnId?: string | null;
-  interceptWindow?: PhomInterceptWindow | null;
-  chattedCounts: Record<string, number>;
-  chattedCards: Record<string, Card[]>;
-  winnerPlayerId?: string | null;
-  isUTrang?: boolean;
-  winReason?: 'U' | 'U_TRANG' | 'NOC_EMPTY_DRAW';
-  penalties?: Record<string, PhomPenaltyInfo>;
+export type BanTauPhase = 'PLACEMENT' | 'BATTLE' | 'FINISHED';
+
+export interface BanTauState {
+  phase: BanTauPhase;
+  player1Id: string | null;
+  player2Id: string | null;
+  currentTurnPlayerId: string | null;
+  turnTimeRemaining: number; // 30s
+  placementTimeRemaining: number; // 60s
+  player1: BanTauPlayerState;
+  player2: BanTauPlayerState;
+  shotHistory: ShotRecord[];
+  lastShot: ShotRecord | null;
+  spectatorIds: string[];
+  winnerPlayerId: string | null;
+  winReason?: 'ALL_SHIPS_SUNK' | 'TIMEOUT' | 'RESIGN';
 }
 
 // --- CỜ CARO TYPES ---
@@ -78,24 +195,24 @@ export interface CaroState {
 
 // --- CỜ TƯỚNG (XIANGQI) TYPES ---
 export type XiangqiPieceType =
-  | 'GENERAL' // Tướng / Soái (帥 / 將)
-  | 'ADVISOR' // Sĩ (仕 / 士)
-  | 'ELEPHANT' // Tượng (相 / 象)
-  | 'HORSE' // Mã (傌 / 馬)
-  | 'CHARIOT' // Xe (俥 / 車)
-  | 'CANNON' // Pháo (炮 / 砲)
-  | 'SOLDIER'; // Tốt / Binh (兵 / 卒)
+  | 'GENERAL'
+  | 'ADVISOR'
+  | 'ELEPHANT'
+  | 'HORSE'
+  | 'CHARIOT'
+  | 'CANNON'
+  | 'SOLDIER';
 
 export type XiangqiSide = 'RED' | 'BLACK';
 
 export type XiangqiTimeMode = 'STANDARD' | 'BLITZ_5M';
 
 export interface XiangqiPiece {
-  id: string; // e.g. "R_CH_1", "B_GE"
+  id: string;
   type: XiangqiPieceType;
   color: XiangqiSide;
-  x: number; // 0..8 (0 is left from Red's perspective, 8 is right)
-  y: number; // 0..9 (0 is Black palace/baseline, 9 is Red palace/baseline)
+  x: number;
+  y: number;
 }
 
 export interface XiangqiMove {
@@ -103,7 +220,7 @@ export interface XiangqiMove {
   to: { x: number; y: number };
   piece: XiangqiPiece;
   capturedPiece?: XiangqiPiece;
-  notation: string; // e.g. "Pháo 2 bình 5"
+  notation: string;
   isCheck?: boolean;
   timestamp: number;
 }
@@ -114,11 +231,11 @@ export interface XiangqiState {
   redPlayerId: string | null;
   blackPlayerId: string | null;
   spectatorIds: string[];
-  redTimeRemaining: number; // in seconds
+  redTimeRemaining: number;
   blackTimeRemaining: number;
-  initialBlitzTime: number; // 3600 (Standard 60m) or 300 (Blitz 5m)
+  initialBlitzTime: number;
   timeMode: XiangqiTimeMode;
-  incrementSeconds: number; // 30s for standard, 3s for blitz
+  incrementSeconds: number;
   lastMove: XiangqiMove | null;
   moveHistory: XiangqiMove[];
   isCheck: boolean;
@@ -129,8 +246,8 @@ export interface XiangqiState {
 }
 
 export interface Card {
-  id: string; // e.g. "3_SPADE", "14_HEART", "15_DIAMOND"
-  rank: number; // 3..15 (11=J, 12=Q, 13=K, 14=A, 15=2/Heo)
+  id: string;
+  rank: number;
   suit: Suit;
 }
 
@@ -140,9 +257,9 @@ export type HandType =
   | 'PAIR'
   | 'TRIPLE'
   | 'STRAIGHT'
-  | 'FOUR_OF_A_KIND' // Tứ quý
-  | 'THREE_PAIRS_SEQUENCE' // 3 đôi thông
-  | 'FOUR_PAIRS_SEQUENCE'; // 4 đôi thông
+  | 'FOUR_OF_A_KIND'
+  | 'THREE_PAIRS_SEQUENCE'
+  | 'FOUR_PAIRS_SEQUENCE';
 
 export interface AnalyzedHand {
   isValid: boolean;
@@ -178,7 +295,7 @@ export interface PlayerPublicInfo {
   status: PlayerStatus;
   cardCount: number;
   seatIndex: number;
-  rank?: number; // 1 (Nhất), 2 (Nhì), 3 (Ba), 4 (Bét)
+  rank?: number;
   hasPassedCurrentRound: boolean;
   isCurrentTurn: boolean;
   isConnected: boolean;
@@ -186,16 +303,20 @@ export interface PlayerPublicInfo {
   isSpectator?: boolean;
   xiangqiSide?: XiangqiSide;
   caroPiece?: CaroPiece;
+  fleetPlaced?: boolean;
+  caNguaColor?: CaNguaColor;
+  chessSide?: ChessSide;
+  returnedToWaiting?: boolean;
 }
 
 export interface Player {
-  id: string; // persistent client-generated ID
+  id: string;
   socketId: string | null;
   name: string;
   avatar: string;
   isHost: boolean;
   status: PlayerStatus;
-  cards: Card[]; // secret to player
+  cards: Card[];
   seatIndex: number;
   rank?: number;
   hasPassedCurrentRound: boolean;
@@ -205,6 +326,11 @@ export interface Player {
   isSpectator?: boolean;
   xiangqiSide?: XiangqiSide;
   caroPiece?: CaroPiece;
+  ships?: PlacedShip[]; // for BAN_TAU
+  fleetPlaced?: boolean;
+  caNguaColor?: CaNguaColor;
+  chessSide?: ChessSide;
+  returnedToWaiting?: boolean;
 }
 
 export interface ChatMessage {
@@ -221,12 +347,12 @@ export interface GameResultRecord {
   playerId: string;
   playerName: string;
   avatar: string;
-  rank: number; // 1, 2, 3, 4
+  rank: number;
   cardsLeft: number;
   cardsLeftList: Card[];
   scoreChange: number;
-  isCong?: boolean; // Chưa đánh được lá nào
-  isThoiHeo?: boolean; // Còn heo trên tay
+  isCong?: boolean;
+  isThoiHeo?: boolean;
 }
 
 export interface SamLocState {
@@ -253,26 +379,11 @@ export interface RoomPublicState {
   samLocState?: SamLocState;
   xiangqiState?: XiangqiState;
   caroState?: CaroState;
-  phomState?: PhomState;
+  banTauState?: BanTauState;
+  coCaNguaState?: CoCaNguaState;
+  chessState?: ChessState;
   results?: GameResultRecord[];
-  voiceParticipants?: VoiceParticipant[];
-}
-
-export interface VoiceParticipant {
-  socketId: string;
-  playerId: string;
-  playerName: string;
-  playerAvatar: string;
-  isMuted: boolean;
-  isSpeaking: boolean;
-  hasMic?: boolean;
-  joinedAt: number;
-}
-
-export interface VoiceSignalData {
-  type: 'offer' | 'answer' | 'candidate';
-  sdp?: any;
-  candidate?: any;
+  chatMessages?: ChatMessage[];
 }
 
 export interface RoomListItem {

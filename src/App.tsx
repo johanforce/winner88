@@ -20,9 +20,9 @@ import { PhongChoi } from './components/PhongChoi';
 import { BanChoi } from './components/BanChoi';
 import { BanCoTuong } from './components/BanCoTuong';
 import { BanCaro } from './components/BanCaro';
-import { BanPhom } from './components/BanPhom';
-import { VoiceChatProvider } from './context/VoiceChatContext';
-import { VoiceChatWidget } from './components/VoiceChatWidget';
+import { BanTau } from './components/BanTau';
+import { BanCoCaNgua } from './components/BanCoCaNgua';
+import { BanCoVua } from './components/BanCoVua';
 import { WifiOff, AlertTriangle } from 'lucide-react';
 
 export default function App() {
@@ -329,14 +329,25 @@ export default function App() {
       )}
 
       {currentScreen === 'ROOM' && roomState && (
-        <VoiceChatProvider
-          roomCode={roomState.code}
-          playerId={profile.id}
-          playerName={profile.name}
-          playerAvatar={profile.avatar}
-        >
-          {roomState.status === 'WAITING' ? (
+        <>
+          {roomState.status === 'WAITING' ||
+          (roomState.status === 'FINISHED' &&
+            roomState.players.find((p) => p.id === profile.id)?.returnedToWaiting) ? (
             <PhongChoi
+              roomState={roomState}
+              myPlayerId={profile.id}
+              chatMessages={chatMessages}
+              onLeaveRoom={handleLeaveRoom}
+            />
+          ) : roomState.rule === 'CO_CA_NGUA' ? (
+            <BanCoCaNgua
+              roomState={roomState}
+              myPlayerId={profile.id}
+              chatMessages={chatMessages}
+              onLeaveRoom={handleLeaveRoom}
+            />
+          ) : roomState.rule === 'CO_VUA' ? (
+            <BanCoVua
               roomState={roomState}
               myPlayerId={profile.id}
               chatMessages={chatMessages}
@@ -356,11 +367,10 @@ export default function App() {
               chatMessages={chatMessages}
               onLeaveRoom={handleLeaveRoom}
             />
-          ) : roomState.rule === 'PHOM' ? (
-            <BanPhom
+          ) : roomState.rule === 'BAN_TAU' ? (
+            <BanTau
               roomState={roomState}
               myPlayerId={profile.id}
-              playerCards={playerCards}
               chatMessages={chatMessages}
               onLeaveRoom={handleLeaveRoom}
             />
@@ -373,15 +383,7 @@ export default function App() {
               onLeaveRoom={handleLeaveRoom}
             />
           )}
-
-          {/* Floating Voice Chat Controls (persistent across waiting and in-game) */}
-          <div className="fixed bottom-3 right-3 sm:bottom-4 sm:right-4 z-40">
-            <VoiceChatWidget
-              roomState={roomState}
-              myPlayerId={profile.id}
-            />
-          </div>
-        </VoiceChatProvider>
+        </>
       )}
     </div>
   );

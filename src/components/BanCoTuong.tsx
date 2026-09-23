@@ -40,7 +40,6 @@ import {
 import { socket } from '../socket';
 import { KhungChat } from './KhungChat';
 import { RuleGuideModal } from './RuleGuideModal';
-import { useVoiceChat } from '../context/VoiceChatContext';
 import {
   getPieceAt,
   getLegalMoves,
@@ -95,8 +94,6 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   const [aiHint, setAiHint] = useState<XiangqiAiHint | null>(null);
   const [isCalculatingHint, setIsCalculatingHint] = useState<boolean>(false);
   const [aiToastMessage, setAiToastMessage] = useState<string | null>(null);
-
-  const { participants: voiceParticipants, speakingMap } = useVoiceChat();
 
   // Auto-dismiss AI toast after 4s
   useEffect(() => {
@@ -312,8 +309,8 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   const handleResetToWaiting = () => {
     setActionError(null);
     socket.emit(
-      'ROOM_RESET_TO_WAITING',
-      { roomCode: roomState.code, requestedByPlayerId: myPlayerId },
+      'PLAYER_RETURN_TO_WAITING',
+      { roomCode: roomState.code, playerId: myPlayerId },
       (res: { success: boolean; message?: string }) => {
         if (!res.success) setActionError(res.message || 'Không thể về phòng chờ');
       }
@@ -524,62 +521,22 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
             const oppTime = oppSide === 'RED' ? xiangqi?.redTimeRemaining ?? 0 : xiangqi?.blackTimeRemaining ?? 0;
             const isOppTurn = xiangqi?.currentSide === oppSide && !xiangqi.winnerSide;
             const isLowTime = oppTime <= 30;
-            const voiceUser = opp ? voiceParticipants.find((vp) => vp.playerId === opp.id) : null;
-            const isSpeaking = opp ? speakingMap[opp.id] || voiceUser?.isSpeaking : false;
 
             return (
               <div
                 className={`w-full mb-3 px-4 py-2.5 rounded-2xl border transition-all flex items-center justify-between shadow-md ${
-                  isSpeaking
-                    ? 'bg-stone-900 border-emerald-500/80 shadow-emerald-950/40 ring-2 ring-emerald-500/30'
-                    : isOppTurn
+                  isOppTurn
                     ? 'bg-stone-900 border-amber-500/60 shadow-amber-950/30'
                     : 'bg-stone-900/80 border-stone-800'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="relative">
-                    <span
-                      className={`text-3xl inline-block transition-all rounded-full ${
-                        isSpeaking ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-stone-900 animate-pulse' : ''
-                      }`}
-                    >
+                    <span className="text-3xl inline-block transition-all rounded-full">
                       {opp?.avatar || (oppSide === 'RED' ? '🔴' : '⚫')}
                     </span>
                     {opp?.isHost && (
                       <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-400 absolute -top-1 -right-1" />
-                    )}
-                    {voiceUser && (
-                      <div
-                        className={`absolute -bottom-1 -left-1 p-0.5 rounded-full border shadow z-20 ${
-                          voiceUser.hasMic === false
-                            ? 'bg-sky-950 border-sky-700 text-sky-400'
-                            : voiceUser.isMuted
-                            ? 'bg-stone-900 border-stone-700 text-stone-400'
-                            : isSpeaking
-                            ? 'bg-emerald-500 border-emerald-300 text-slate-950 animate-bounce'
-                            : 'bg-emerald-950 border-emerald-700 text-emerald-400'
-                        }`}
-                        title={
-                          voiceUser.hasMic === false
-                            ? 'Đang nghe phòng 🎧'
-                            : voiceUser.isMuted
-                            ? 'Đã tắt mic'
-                            : isSpeaking
-                            ? 'Đang nói...'
-                            : 'Đang bật mic'
-                        }
-                      >
-                        {voiceUser.hasMic === false ? (
-                          <Headphones className="w-2.5 h-2.5" />
-                        ) : voiceUser.isMuted ? (
-                          <MicOff className="w-2.5 h-2.5" />
-                        ) : isSpeaking ? (
-                          <Radio className="w-2.5 h-2.5" />
-                        ) : (
-                          <Mic className="w-2.5 h-2.5" />
-                        )}
-                      </div>
                     )}
                   </div>
                   <div>
@@ -587,11 +544,6 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                       <span className="font-extrabold text-sm text-stone-100">
                         {opp?.name || (oppSide === 'RED' ? 'Kỳ thủ Đỏ' : 'Kỳ thủ Đen')}
                       </span>
-                      {isSpeaking && (
-                        <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-bold animate-pulse">
-                          Đang nói 🎙️
-                        </span>
-                      )}
                       <span
                         className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
                           oppSide === 'RED'
@@ -978,62 +930,22 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
             const myTime = myCurrentSide === 'RED' ? xiangqi?.redTimeRemaining ?? 0 : xiangqi?.blackTimeRemaining ?? 0;
             const isTurn = xiangqi?.currentSide === myCurrentSide && !xiangqi.winnerSide;
             const isLowTime = myTime <= 30;
-            const voiceUser = mePlayer ? voiceParticipants.find((vp) => vp.playerId === mePlayer.id) : null;
-            const isSpeaking = mePlayer ? speakingMap[mePlayer.id] || voiceUser?.isSpeaking : false;
 
             return (
               <div
                 className={`w-full mt-3 px-4 py-2.5 rounded-2xl border transition-all flex items-center justify-between shadow-md ${
-                  isSpeaking
-                    ? 'bg-stone-900 border-emerald-500/80 shadow-emerald-950/40 ring-2 ring-emerald-500/30'
-                    : isTurn
+                  isTurn
                     ? 'bg-stone-900 border-amber-500/60 shadow-amber-950/30 ring-1 ring-amber-500/30'
                     : 'bg-stone-900/80 border-stone-800'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="relative">
-                    <span
-                      className={`text-3xl inline-block transition-all rounded-full ${
-                        isSpeaking ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-stone-900 animate-pulse' : ''
-                      }`}
-                    >
+                    <span className="text-3xl inline-block transition-all rounded-full">
                       {mePlayer?.avatar || (myCurrentSide === 'RED' ? '🔴' : '⚫')}
                     </span>
                     {mePlayer?.isHost && (
                       <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-400 absolute -top-1 -right-1" />
-                    )}
-                    {voiceUser && (
-                      <div
-                        className={`absolute -bottom-1 -left-1 p-0.5 rounded-full border shadow z-20 ${
-                          voiceUser.hasMic === false
-                            ? 'bg-sky-950 border-sky-700 text-sky-400'
-                            : voiceUser.isMuted
-                            ? 'bg-stone-900 border-stone-700 text-stone-400'
-                            : isSpeaking
-                            ? 'bg-emerald-500 border-emerald-300 text-slate-950 animate-bounce'
-                            : 'bg-emerald-950 border-emerald-700 text-emerald-400'
-                        }`}
-                        title={
-                          voiceUser.hasMic === false
-                            ? 'Đang nghe phòng 🎧'
-                            : voiceUser.isMuted
-                            ? 'Đã tắt mic'
-                            : isSpeaking
-                            ? 'Đang nói...'
-                            : 'Đang bật mic'
-                        }
-                      >
-                        {voiceUser.hasMic === false ? (
-                          <Headphones className="w-2.5 h-2.5" />
-                        ) : voiceUser.isMuted ? (
-                          <MicOff className="w-2.5 h-2.5" />
-                        ) : isSpeaking ? (
-                          <Radio className="w-2.5 h-2.5" />
-                        ) : (
-                          <Mic className="w-2.5 h-2.5" />
-                        )}
-                      </div>
                     )}
                   </div>
                   <div>
@@ -1044,11 +956,6 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                       {me?.id === mePlayer?.id && (
                         <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded font-bold">
                           Bạn
-                        </span>
-                      )}
-                      {isSpeaking && (
-                        <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-bold animate-pulse">
-                          Đang nói 🎙️
                         </span>
                       )}
                       <span
@@ -1113,6 +1020,29 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
               >
                 <Flag className="w-4 h-4" />
                 <span>Đầu Hàng</span>
+              </button>
+            </div>
+          )}
+
+          {/* Action Toolbar when Game is Over - For all players and spectators */}
+          {xiangqi?.winnerSide && (
+            <div className="w-full mt-3 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={handleResetToWaiting}
+                id="btn-co-tuong-toolbar-back-waiting"
+                className="flex-1 min-h-[42px] py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-xl text-xs font-bold text-white shadow-lg flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation"
+              >
+                <Users className="w-4 h-4" />
+                <span>Quay Về Phòng Chờ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsGameOverModalDismissed(false)}
+                className="py-2 px-3 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded-xl text-xs font-bold text-stone-300 flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <Trophy className="w-4 h-4 text-amber-400" />
+                <span>Xem Kết Quả</span>
               </button>
             </div>
           )}
@@ -1437,8 +1367,23 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                   );
                 })}
 
-                {/* Host Control panel in spectators tab */}
-                {isHost && (
+                {/* Controls in spectators tab */}
+                {xiangqi?.winnerSide ? (
+                  <div className="mt-3 pt-3 border-t border-stone-800">
+                    <span className="text-xs font-bold text-emerald-400 block mb-2">
+                      Ván Cờ Đã Kết Thúc
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleResetToWaiting}
+                      id="btn-all-reset-waiting"
+                      className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-extrabold rounded-xl shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>Quay Về Phòng Chờ</span>
+                    </button>
+                  </div>
+                ) : isHost && (
                   <div className="mt-3 pt-3 border-t border-stone-800">
                     <span className="text-xs font-bold text-amber-400 block mb-2">
                       Quyền Chủ Phòng
@@ -1640,32 +1585,29 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 <span>Xem Thế Cờ Tàn Cuộc & Nước Đi ({xiangqi.moveHistory.length} nước)</span>
               </button>
 
-              {/* Host vs Guest action buttons */}
+              {/* Action buttons for all players and spectators */}
               <div className="pt-2 space-y-2">
-                {isHost ? (
-                  <div className="flex gap-2">
+                <div className="flex gap-2">
+                  {isHost && (
                     <button
                       type="button"
                       onClick={handlePlayAgain}
                       id="btn-co-tuong-rematch"
-                      className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm rounded-xl shadow-lg transition cursor-pointer"
+                      className="flex-1 py-3 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white font-extrabold text-sm rounded-xl shadow-lg transition cursor-pointer"
                     >
                       Đấu Ván Mới
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleResetToWaiting}
-                      id="btn-co-tuong-back-waiting"
-                      className="flex-1 py-3 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-sm rounded-xl border border-stone-700 transition cursor-pointer"
-                    >
-                      Về Phòng Chờ
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-xs text-stone-400 italic">
-                    Đang đợi chủ phòng bấm bắt đầu ván mới hoặc về phòng chờ...
-                  </p>
-                )}
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleResetToWaiting}
+                    id="btn-co-tuong-back-waiting"
+                    className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Quay Về Phòng Chờ</span>
+                  </button>
+                </div>
 
                 <button
                   type="button"

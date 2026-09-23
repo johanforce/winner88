@@ -92,14 +92,34 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
             <span>❌⭕ Cờ Caro</span>
           </button>
           <button
-            onClick={() => setActiveTab('PHOM')}
+            onClick={() => setActiveTab('BAN_TAU')}
             className={`pb-2.5 px-2.5 sm:px-3 font-semibold text-xs sm:text-sm transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer touch-manipulation ${
-              activeTab === 'PHOM'
+              activeTab === 'BAN_TAU'
+                ? 'border-blue-500 text-blue-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>🚢 Bắn Tàu</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('CO_CA_NGUA')}
+            className={`pb-2.5 px-2.5 sm:px-3 font-semibold text-xs sm:text-sm transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer touch-manipulation ${
+              activeTab === 'CO_CA_NGUA'
                 ? 'border-purple-500 text-purple-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <span>🎴 Phỏm (Tá Lả)</span>
+            <span>🎲 Cờ Cá Ngựa</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('CO_VUA')}
+            className={`pb-2.5 px-2.5 sm:px-3 font-semibold text-xs sm:text-sm transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer touch-manipulation ${
+              activeTab === 'CO_VUA'
+                ? 'border-amber-500 text-amber-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>♟️ Cờ Vua (AI)</span>
           </button>
           <button
             onClick={() => setActiveTab('PENALTY_RATES')}
@@ -380,107 +400,164 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                 </ul>
               </div>
             </>
-          ) : activeTab === 'PHOM' ? (
+          ) : activeTab === 'BAN_TAU' ? (
             <>
-              {/* 1. Chuẩn bị */}
-              <div className="bg-purple-950/40 border border-purple-800/40 p-3.5 rounded-xl">
-                <h3 className="font-bold text-purple-300 text-xs flex items-center gap-1.5 mb-2">
-                  <BookOpen className="w-4 h-4 text-purple-400" /> 1. Chuẩn Bị & Điều Kiện Bắt Đầu
+              {/* 1. Hạm đội và Lưới Tọa Độ */}
+              <div className="bg-blue-950/40 border border-blue-800/40 p-3.5 rounded-xl">
+                <h3 className="font-bold text-blue-300 text-xs flex items-center gap-1.5 mb-2">
+                  <BookOpen className="w-4 h-4 text-blue-400" /> 1. Hạm Đội & Lưới Tọa Độ (10x10)
                 </h3>
                 <ul className="text-xs text-slate-300 space-y-1 list-disc pl-5">
-                  <li>Bộ bài Tây 52 lá chuẩn, không dùng Joker.</li>
-                  <li>Số người chơi bắt buộc: <strong>Đúng 4 người</strong>.</li>
-                  <li>Mỗi người chơi được chia <strong>9 lá bài</strong>.</li>
-                  <li>Số bài còn lại úp làm <strong>Nọc</strong>, lật ngửa 1 lá đầu tiên đặt riêng làm lá đánh mở màn.</li>
-                  <li>Mỗi người cần có tối thiểu <strong>200 xu</strong> để vào phòng chơi.</li>
-                </ul>
-              </div>
-
-              {/* 2. Khái niệm Phỏm */}
-              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
-                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
-                  <CheckCircle className="w-4 h-4 text-emerald-400" /> 2. Khái Niệm "Phỏm" (Bộ 3 lá hợp lệ)
-                </h3>
-                <p className="text-xs text-slate-300">
-                  Phỏm là bộ 3 lá bài hợp lệ, gồm 2 loại duy nhất:
-                </p>
-                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
-                  <li><strong>Phỏm ngang (bộ 3 số / sáp):</strong> 3 lá cùng giá trị (rank), khác chất nhau. Ví dụ: 7♠ 7♦ 7♣.</li>
-                  <li><strong>Phỏm dọc (sảnh):</strong> 3 lá liên tiếp về giá trị, cùng một chất. Ví dụ: 5♥ 6♥ 7♥.</li>
-                  <li><strong>Quy tắc quân Át (A):</strong> Quân A chỉ được đứng đầu sảnh (A-2-3) hoặc cuối sảnh (Q-K-A). <strong>Không nối vòng (K-A-2 là KHÔNG hợp lệ)</strong>.</li>
-                </ul>
-              </div>
-
-              {/* 3. Trình tự lượt chơi */}
-              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
-                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-amber-400" /> 3. Trình Tự Một Lượt Chơi (2 Bước Bắt Buộc)
-                </h3>
-                <div className="space-y-2 text-xs text-slate-300">
-                  <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-                    <strong className="text-amber-300">Bước 1 – Lấy bài (chỉ chọn 1 trong 2):</strong>
-                    <ul className="list-disc pl-5 mt-1 space-y-0.5">
-                      <li>Bốc 1 lá úp từ Nọc, hoặc:</li>
-                      <li>Ăn lá bài rác của người đi trước nếu lá đó kết hợp với 2 lá trên tay tạo thành 1 Phỏm hợp lệ. Khi ăn bài, Phỏm mới tạo thành phải được hạ ngửa ngay xuống bàn cho mọi người thấy.</li>
-                    </ul>
-                  </div>
-
-                  <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-                    <strong className="text-rose-300">Bước 2 – Đánh bài:</strong>
-                    <ul className="list-disc pl-5 mt-1 space-y-0.5">
-                      <li>Đánh 1 lá bài rác trên tay xuống bàn.</li>
-                      <li><strong>Lưu ý:</strong> Không được đánh ra chính lá bài mình vừa ăn trong lượt đó!</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* 4. Luật Chặt bài */}
-              <div className="bg-rose-950/30 border border-rose-800/40 p-3.5 rounded-xl space-y-2">
-                <h3 className="font-bold text-rose-300 text-xs flex items-center gap-1.5">
-                  <ShieldAlert className="w-4 h-4 text-rose-400" /> 4. Luật Chặn / "Chặt" Bài (Đặc Biệt)
-                </h3>
-                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
-                  <li>Khi bất kỳ người chơi nào đánh ra 1 lá bài, hệ thống mở <strong>cửa sổ 5 giây</strong> cho tất cả người chơi khác.</li>
-                  <li>Bất kỳ ai (không chỉ người ngồi kế tiếp) có 2 lá bài trên tay kết hợp được với lá vừa đánh tạo thành Phỏm hợp lệ đều có quyền bấm <strong>CHẶT BÀI</strong>.</li>
-                  <li>Nếu có người chặt thành công:
-                    <ul className="list-circle pl-5 mt-1 space-y-0.5">
-                      <li>Người chặt hạ ngay Phỏm đó xuống bàn.</li>
-                      <li>Người vừa đánh lá bài bị phạt và phải trả tiền cho người chặt.</li>
-                      <li>Lượt chơi lập tức chuyển về cho người vừa chặt, người này tiếp tục thực hiện Bước 2 (Đánh 1 lá rác).</li>
+                  <li>Bản đồ hải chiến là một lưới 10&times;10 ô vuông (Cột A–J, Hàng 1–10).</li>
+                  <li>Mỗi Thuyền trưởng sở hữu <strong>5 chiến hạm</strong>:
+                    <ul className="list-circle pl-5 mt-1 space-y-0.5 font-mono text-[11px] text-cyan-300">
+                      <li>Tàu sân bay (Aircraft Carrier): Chiếm 5 ô</li>
+                      <li>Thiết giáp hạm (Battleship): Chiếm 4 ô</li>
+                      <li>Tàu tuần dương (Cruiser): Chiếm 3 ô</li>
+                      <li>Tàu ngầm (Submarine): Chiếm 3 ô</li>
+                      <li>Tàu khu trục (Destroyer): Chiếm 2 ô</li>
                     </ul>
                   </li>
-                  <li>Nếu hết 5 giây không ai chặt, lượt chơi tiếp tục theo chiều kim đồng hồ như bình thường.</li>
+                  <li>Phòng chơi hỗ trợ <strong>2 Thuyền trưởng thi đấu</strong> và <strong>tối đa 6 khán giả theo dõi</strong>.</li>
                 </ul>
               </div>
 
-              {/* 5. Thắng thua & Tính điểm */}
+              {/* 2. Giai đoạn bố trí tàu */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> 2. Giai Đoạn Bố Trí Tàu (Placement Phase)
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li>Tàu có thể được bố trí theo chiều <strong>Ngang</strong> hoặc <strong>Dọc</strong>.</li>
+                  <li>Các tàu không được xếp đè lên nhau hoặc vượt ra ngoài ranh giới lưới 10&times;10.</li>
+                  <li>Bạn có thể bấm <strong>"Bố trí ngẫu nhiên"</strong> để hệ thống tự động dàn trận hạm đội tức thì.</li>
+                  <li>Sau khi đã hài lòng với đội hình bí mật, bấm <strong>"Sẵn sàng chiến đấu"</strong>. Khi cả 2 bên cùng sẵn sàng, hải chiến chính thức bắt đầu!</li>
+                </ul>
+              </div>
+
+              {/* 3. Giai đoạn hải chiến */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-amber-400" /> 3. Giai Đoạn Khai Hỏa (Battle Phase)
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li>Hai bên luân phiên nhau chọn 1 ô trên lưới biển của đối phương để khai hỏa.</li>
+                  <li><strong>Bắn Trúng (💥 HIT):</strong> Đạn trúng vào thân tàu đối phương. Ô đổi sang màu đỏ rực kèm hiệu ứng nổ. Thuyền trưởng bắn trúng sẽ được bắn tiếp 1 phát nữa!</li>
+                  <li><strong>Bắn Trượt (💦 MISS):</strong> Đạn rơi xuống biển nước. Ô đổi sang màu xám/bọt biển, lượt bắn chuyển sang cho đối thủ.</li>
+                  <li><strong>Đánh Chìm (SUNK):</strong> Khi toàn bộ các ô của một con tàu bị bắn trúng, tàu đó sẽ chính thức bị đánh chìm xuống đáy đại dương!</li>
+                </ul>
+              </div>
+
+              {/* 4. Điều kiện chiến thắng */}
               <div className="bg-amber-950/30 border border-amber-800/40 p-3.5 rounded-xl space-y-2">
                 <h3 className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
-                  <Award className="w-4 h-4 text-amber-400" /> 5. Điều Kiện Thắng / Thua & Tính Điểm
+                  <Award className="w-4 h-4 text-amber-400" /> 4. Điều Kiện Thắng / Thua
                 </h3>
                 <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
-                  <li><strong>Ù (Thắng tuyệt đối):</strong> Sau khi hạ phỏm/chặt, toàn bộ bài trên tay đều nằm trong các phỏm hợp lệ, không còn lá rác nào (hoặc chỉ còn đúng 1 lá rác đánh ra để thắng). Ván dừng ngay lập tức.</li>
-                  <li><strong>Ù Trắng:</strong> Ngay sau khi chia 9 lá ban đầu, bài tự tạo thành các phỏm trọn vẹn. Thắng ngay lập tức và được <strong>nhân đôi tiền thưởng (x2)</strong> từ mỗi người chơi.</li>
-                  <li><strong>Hết nọc:</strong> Nọc được bốc hết mà không ai Ù, mỗi người hạ các phỏm hợp lệ trên tay (nếu có) và tính điểm các lá bài rác còn lại:
-                    <div className="mt-1 text-[11px] font-mono text-amber-300">
-                      Át (A) = 1 điểm • 2..10 = số tương ứng • J = 11 • Q = 12 • K = 13 điểm
-                    </div>
-                    Người có <strong>tổng điểm bài rác thấp nhất</strong> sẽ giành chiến thắng!
-                  </li>
+                  <li>Bên nào <strong>bắn chìm toàn bộ 5 chiến hạm (tổng 17 ô)</strong> của đối phương trước sẽ giành chiến thắng tuyệt đối!</li>
+                  <li>Người thắng nhận được 50 xu thưởng, người thua bị trừ 50 xu.</li>
+                  <li>Kết thúc trận, toàn bộ vị trí chiến hạm của cả 2 bên sẽ được công khai minh bạch trên bàn đấu.</li>
+                </ul>
+              </div>
+            </>
+          ) : activeTab === 'CO_CA_NGUA' ? (
+            <>
+              {/* 1. Giới thiệu & Số lượng người chơi */}
+              <div className="bg-purple-950/40 border border-purple-800/40 p-3.5 rounded-xl">
+                <h3 className="font-bold text-purple-300 text-xs flex items-center gap-1.5 mb-2">
+                  <BookOpen className="w-4 h-4 text-purple-400" /> 1. Bàn Cờ & Người Tham Gia
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1 list-disc pl-5">
+                  <li>Hỗ trợ <strong>từ 2 đến 4 kỳ thủ đua ngựa</strong> tương ứng 4 màu: <strong>Đỏ, Xanh Dương, Vàng, Xanh Lá</strong>.</li>
+                  <li>Mỗi người chơi chỉ huy <strong>4 chú ngựa</strong> xuất phát từ chuồng cùng màu.</li>
+                  <li>Đường đua chung gồm <strong>56 ô liên hoàn</strong> chạy theo chiều kim đồng hồ quanh bàn cờ.</li>
+                  <li>Hỗ trợ thêm <strong>4 vị trí Khán giả</strong> để bạn bè cùng vào theo dõi cổ vũ.</li>
                 </ul>
               </div>
 
-              {/* 6. Mức cược & Phạt xu */}
-              <div className="bg-slate-950/70 border border-slate-800 p-3.5 rounded-xl space-y-2">
+              {/* 2. Gieo xúc xắc & Xuất chuồng */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
                 <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
-                  <Coins className="w-4 h-4 text-amber-400" /> 6. Mức Phạt & Thưởng Xu Game Phỏm
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> 2. Đổ Xúc Xắc &amp; Xuất Chuồng
                 </h3>
-                <ul className="text-xs text-slate-300 space-y-1 list-disc pl-5">
-                  <li><strong>Ăn cây / Chặt bài:</strong> 20 xu mỗi lần (người đánh trả trực tiếp cho người ăn/chặt).</li>
-                  <li><strong>Điểm bài rác khi hết nọc:</strong> Mỗi điểm bài rác = 10 xu. Người thua trả cho người thắng số xu = chênh lệch điểm rác &times; 10 xu.</li>
-                  <li><strong>Ù thường:</strong> Người thắng Ù nhận từ mỗi người thua tổng điểm rác của người đó &times; 10 xu (cộng tiền ăn cây).</li>
-                  <li><strong>Ù trắng:</strong> Nhận gấp đôi (x2) tiền thắng từ mỗi người trong bàn.</li>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li>Mỗi lượt, người chơi bấm nút <strong>Gieo Xúc Xắc (1-6)</strong>.</li>
+                  <li><strong>Xuất Chuồng:</strong> Khi gieo được mặt <strong>1</strong> hoặc <strong>6</strong>, bạn có thể đưa một chú ngựa từ trong chuồng ra ô xuất phát (cửa chuồng màu mình).</li>
+                  <li><strong>Thưởng thêm lượt:</strong> Gieo được <strong>1</strong> hoặc <strong>6</strong> sẽ nhận ngay thêm <strong>1 lượt gieo tiếp</strong>!</li>
+                </ul>
+              </div>
+
+              {/* 3. Di chuyển & Đá ngựa */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-amber-400" /> 3. Di Chuyển &amp; Đá Ngựa Đối Phương
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li>Ngựa trên đường đua tiến tới đúng số bước bằng số chấm xúc xắc vừa gieo.</li>
+                  <li><strong>Đá ngựa (K.O):</strong> Nếu điểm đáp trùng đúng ô mà ngựa của đối phương đang đứng, chú ngựa đó sẽ bị <strong>ĐÁ văng về chuồng</strong>!</li>
+                  <li><strong>Thưởng khi đá ngựa:</strong> Khi đá thành công ngựa đối phương, bạn được <strong>thưởng thêm 1 lượt gieo xúc xắc</strong>.</li>
+                </ul>
+              </div>
+
+              {/* 4. Lên thang chuồng & Về đích */}
+              <div className="bg-amber-950/30 border border-amber-800/40 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-amber-400" /> 4. Lên Thang Chuồng &amp; Chiến Thắng
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li>Sau khi hoàn thành 1 vòng 56 ô, ngựa sẽ tiến vào <strong>thang chuồng (bậc 1 đến bậc 6)</strong> màu của mình.</li>
+                  <li>Ngựa phải tiến lần lượt từng bậc hoặc gieo đúng số bậc cần nhảy. Khi lên tới <strong>bậc 6</strong>, ngựa hoàn thành về đích!</li>
+                  <li>Người chơi nào đưa được <strong>toàn bộ 4 chú ngựa về chuồng</strong> trước sẽ giành <strong>chiến thắng ván đấu</strong>!</li>
+                </ul>
+              </div>
+            </>
+          ) : activeTab === 'CO_VUA' ? (
+            /* TAB: CỜ VUA (CHESS) */
+            <>
+              {/* 1. Tổng quan & Thời gian */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-amber-400" /> 1. Quy Mô &amp; Thời Gian Thi Đấu
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li><strong>Quy mô phòng:</strong> Tối đa <strong>6 người</strong> (2 kỳ thủ: Trắng đi trước, Đen đi sau + 4 Khán giả theo dõi).</li>
+                  <li><strong>Thời gian:</strong> Mỗi bên có <strong>10 phút</strong> suy nghĩ trong toàn bộ ván cờ. Hết giờ trước sẽ bị xử <strong>thua theo thời gian (Time Out)</strong>.</li>
+                  <li>Bàn cờ kích thước tiêu chuẩn 8x8 với 64 ô màu đen trắng xen kẽ.</li>
+                </ul>
+              </div>
+
+              {/* 2. Nước đi đặc biệt */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> 2. Các Nước Đi Đặc Biệt Chuẩn FIDE
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li><strong>Nhập Thành (Castling):</strong> Di chuyển Vua 2 ô về phía Xe (gần hoặc xa) khi giữa Vua và Xe không có quân cản, cả hai chưa từng di chuyển và các ô Vua đi qua không bị đối phương kiểm soát/chiếu.</li>
+                  <li><strong>Bắt Tốt Qua Đường (En Passant):</strong> Khi Tốt đối phương nhảy 2 ô ở nước đi đầu tiên và đáp cạnh Tốt của bạn, bạn có thể ăn chéo về ô sau lưng Tốt đối phương ngay lượt đi tiếp theo.</li>
+                  <li><strong>Phong Cấp (Pawn Promotion):</strong> Khi Tốt tiến tới hàng cuối cùng (hàng 8 với Trắng, hàng 1 với Đen), bạn có thể phong cấp ngay thành <strong>Hậu (Queen), Xe (Rook), Tượng (Bishop), hoặc Mã (Knight)</strong>.</li>
+                </ul>
+              </div>
+
+              {/* 3. Chiếu, Chiếu Bí & Hòa */}
+              <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-amber-400" /> 3. Chiếu Vua, Chiếu Bí &amp; Cầu Hòa
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li><strong>Chiếu &amp; Chiếu Bí (Check &amp; Checkmate):</strong> Khi Vua bị tấn công và không còn nước đi hợp lệ nào để thoát chiếu, bên đó bị xử <strong>Chiếu bí (Thua cuộc)</strong>.</li>
+                  <li><strong>Hòa Cờ (Draw):</strong> Xảy ra khi: Hết nước đi hợp lệ nhưng Vua không bị chiếu (Stalemate), lặp lại thế cờ 3 lần (Threefold repetition), thiếu quân chiếu bí (Insufficient material), hoặc hai kỳ thủ đồng ý cầu hòa.</li>
+                </ul>
+              </div>
+
+              {/* 4. AI Gemini Phân Tích */}
+              <div className="bg-gradient-to-r from-indigo-950/60 via-purple-950/40 to-slate-900 border border-indigo-800/60 p-3.5 rounded-xl space-y-2">
+                <h3 className="font-bold text-indigo-300 text-xs flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-amber-400" /> 4. Trợ Lý AI Gemini Phân Tích Thế Trận Tự Động
+                </h3>
+                <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
+                  <li>Hệ thống liên tục ghi lại toàn bộ <strong>Nhật ký nước đi (Move History / PGN)</strong> của ván cờ.</li>
+                  <li><strong>Cứ sau mỗi 10 nước đi</strong>, nhật ký ván đấu sẽ được gửi tự động cho mô hình <strong>Gemini</strong>.</li>
+                  <li>Bot AI sẽ xuất hiện ngay trong <strong>khung chat công khai</strong>, mang lại bài nhận định tổng quan về thế trận: ai chiếm ưu thế về không gian, kiểm soát ô trung tâm hay tiềm năng tấn công cánh!</li>
                 </ul>
               </div>
             </>
