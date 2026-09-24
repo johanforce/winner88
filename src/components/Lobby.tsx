@@ -632,12 +632,12 @@ export const Lobby: React.FC<LobbyProps> = ({
                     <span className="text-2xl mb-2 block">♟️</span>
                     <div className="flex items-center gap-2">
                       <span className="font-black text-sm block text-white">Cờ Vua (Chess)</span>
-                      <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-bold">
-                        10 PHÚT
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-bold">
+                        15+10S
                       </span>
                     </div>
                     <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      Cờ vua tiêu chuẩn đối kháng 2 kỳ thủ, có chế độ khán giả theo dõi và bình luận.
+                      Cờ vua Rapid 15 phút (+10s mỗi nước đi), có chế độ khán giả theo dõi và bình luận.
                     </span>
                   </button>
                 </div>

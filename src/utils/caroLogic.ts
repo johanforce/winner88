@@ -6,6 +6,14 @@ export function isInsideBoard(x: number, y: number): boolean {
   return x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE;
 }
 
+export function isBorderCell(x: number, y: number): boolean {
+  return x === 0 || x === BOARD_SIZE - 1 || y === 0 || y === BOARD_SIZE - 1;
+}
+
+export function isPlayableCell(x: number, y: number): boolean {
+  return isInsideBoard(x, y);
+}
+
 /**
  * Âm thanh đánh cờ Caro bằng Web Audio API
  */

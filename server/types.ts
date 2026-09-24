@@ -27,9 +27,10 @@ export interface ChessState {
   whitePlayerId: string | null;
   blackPlayerId: string | null;
   spectatorIds: string[];
-  whiteTimeRemaining: number; // 600s
-  blackTimeRemaining: number; // 600s
-  initialTime: number; // 600
+  whiteTimeRemaining: number; // 900s (15 phút)
+  blackTimeRemaining: number; // 900s (15 phút)
+  initialTime: number; // 900s
+  increment: number; // 10s cho mỗi nước đi
   lastMove: ChessMoveRecord | null;
   moveHistory: ChessMoveRecord[];
   isCheck: boolean;

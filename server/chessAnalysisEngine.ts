@@ -315,27 +315,39 @@ export function generateLocalGrandmasterAnalysis(
     }
   }
 
-  // Tổng hợp nhận định chuyên nghiệp như Grandmaster
-  let commentaryLines: string[] = [];
+  // Tổng hợp nhận định chuyên nghiệp theo đúng chuẩn format mốc 10 ply (5 nước mỗi bên)
+  const endMove = Math.max(1, Math.floor(moveHistory.length / 2));
+  const startMove = Math.max(1, endMove - 4);
+  const milestoneTag = `[Mốc: Nước ${startMove}-${endMove} của Trắng / Nước ${startMove}-${endMove} của Đen]`;
 
-  // 1. Khai cuộc
-  if (fullMoveNum <= 8 && opening) {
-    commentaryLines.push(`📖 Khai cuộc: ${opening.name}. ${opening.summary}`);
+  const notablePoints: string[] = [];
+  if (opening && fullMoveNum <= 8) {
+    notablePoints.push(`- Khai cuộc: ${opening.name}. ${opening.summary}`);
   }
-
-  // 2. Nhận định nước cờ đặc biệt
   if (brilliantAlert) {
-    commentaryLines.push(brilliantAlert);
-  } else if (blunderAlert) {
-    commentaryLines.push(blunderAlert);
-  } else if (tacticalNote) {
-    commentaryLines.push(tacticalNote);
+    notablePoints.push(`- ${brilliantAlert}`);
+  }
+  if (blunderAlert) {
+    notablePoints.push(`- ${blunderAlert}`);
+  }
+  if (tacticalNote) {
+    notablePoints.push(`- ${tacticalNote}`);
+  }
+  if (notablePoints.length === 0) {
+    notablePoints.push(`- Cấu trúc quân ổn định, hai bên tiếp tục hoàn thiện phát triển và chuẩn bị các kế hoạch trung cuộc.`);
   }
 
-  // 3. Đánh giá thế cờ
-  commentaryLines.push(`⚖️ Đánh giá thế trận (Nước ${fullMoveNum}): ${advantageDescription}`);
+  const commentaryText =
+    opening && fullMoveNum <= 5
+      ? `Hai bên chủ động phát triển quân nhẹ và kiểm soát các ô cờ trung tâm quan trọng, chuẩn bị đưa Vua vào vị trí an toàn.`
+      : `Thế trận chuyển biến rõ nét với các nước cơ động quân và tìm kiếm cơ hội đột phá ở cánh hoặc trung tâm.`;
 
-  const fullGrandmasterCommentary = commentaryLines.join('\n');
+  const fullGrandmasterCommentary = `${milestoneTag}
+Bình luận: ${commentaryText}
+Điểm đáng chú ý:
+${notablePoints.join('\n')}
+Đánh giá thế trận:
+${advantageDescription}`;
 
   return {
     openingName: opening?.name || null,

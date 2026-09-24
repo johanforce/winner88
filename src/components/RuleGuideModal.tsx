@@ -521,7 +521,7 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                 </h3>
                 <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-5">
                   <li><strong>Quy mô phòng:</strong> Tối đa <strong>6 người</strong> (2 kỳ thủ: Trắng đi trước, Đen đi sau + 4 Khán giả theo dõi).</li>
-                  <li><strong>Thời gian:</strong> Mỗi bên có <strong>10 phút</strong> suy nghĩ trong toàn bộ ván cờ. Hết giờ trước sẽ bị xử <strong>thua theo thời gian (Time Out)</strong>.</li>
+                  <li><strong>Thời gian:</strong> Mỗi bên có <strong>15 phút</strong> suy nghĩ ban đầu và được <strong>cộng thêm 10 giây (+10s increment)</strong> cho mỗi nước đi hợp lệ. Hết giờ trước sẽ bị xử <strong>thua theo thời gian (Time Out)</strong>.</li>
                   <li>Bàn cờ kích thước tiêu chuẩn 8x8 với 64 ô màu đen trắng xen kẽ.</li>
                 </ul>
               </div>

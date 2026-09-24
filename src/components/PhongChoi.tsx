@@ -587,7 +587,7 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
                 {isCoVua
-                  ? 'Cần đủ 2 kỳ thủ ở ghế Trắng và Đen để bắt đầu (10 phút/bên). Tối đa 4 khán giả theo dõi ván đấu.'
+                  ? 'Cần đủ 2 kỳ thủ ở ghế Trắng và Đen để bắt đầu (15 phút/bên, +10s mỗi nước). Tối đa 4 khán giả theo dõi ván đấu.'
                   : isBanTau
                   ? 'Cần 2 Thuyền trưởng ở Hạm đội 1 và Hạm đội 2 để khai chiến. Tối đa 6 khách theo dõi chiến trận!'
                   : isCaro
@@ -819,7 +819,7 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                 ) : !canStart ? (
                   <span className="text-amber-400 font-medium">
                     {isCoVua
-                      ? '⏳ Cần có đủ 2 kỳ thủ ở ghế Trắng và ghế Đen để bắt đầu trận cờ vua 10 phút.'
+                      ? '⏳ Cần có đủ 2 kỳ thủ ở ghế Trắng và ghế Đen để bắt đầu trận cờ vua 15+10.'
                       : isCoCaNgua
                       ? '⏳ Cần có ít nhất 2 người chơi ở các ghế đua ngựa để bắt đầu.'
                       : isBanTau

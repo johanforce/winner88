@@ -6,18 +6,18 @@ export const COLOR_CONFIG: Record<
   CaNguaColor,
   { name: string; hex: string; bgClass: string; startPos: number; finishPos: number; barnEntrance: number }
 > = {
-  RED: { name: 'Đỏ', hex: '#ef4444', bgClass: 'bg-red-600', startPos: 0, finishPos: 54, barnEntrance: 54 },
-  BLUE: { name: 'Xanh Dương', hex: '#3b82f6', bgClass: 'bg-blue-600', startPos: 14, finishPos: 12, barnEntrance: 12 },
-  YELLOW: { name: 'Vàng', hex: '#eab308', bgClass: 'bg-amber-500', startPos: 28, finishPos: 26, barnEntrance: 26 },
-  GREEN: { name: 'Xanh Lá', hex: '#22c55e', bgClass: 'bg-emerald-600', startPos: 42, finishPos: 40, barnEntrance: 40 },
+  RED: { name: 'Đỏ', hex: '#ef4444', bgClass: 'bg-red-600', startPos: 55, finishPos: 54, barnEntrance: 54 },
+  BLUE: { name: 'Xanh Dương', hex: '#3b82f6', bgClass: 'bg-blue-600', startPos: 13, finishPos: 12, barnEntrance: 12 },
+  YELLOW: { name: 'Vàng', hex: '#eab308', bgClass: 'bg-amber-500', startPos: 27, finishPos: 26, barnEntrance: 26 },
+  GREEN: { name: 'Xanh Lá', hex: '#22c55e', bgClass: 'bg-emerald-600', startPos: 41, finishPos: 40, barnEntrance: 40 },
 };
 
 export const TRACK_CELL_COUNT = 56;
 
-// 4 ô chốt ngay dưới chân thang về đích của 4 màu cờ
+// 4 ô cửa chuồng của 4 màu cờ
 export const APEX_CELLS = [12, 26, 40, 54] as const;
 
-// Bản đồ góc bay 90 độ theo chiều kim đồng hồ giữa 4 ô chốt
+// Bản đồ nhảy cóc theo chiều kim đồng hồ giữa các ô cửa chuồng
 export const NEXT_APEX_MAP: Record<number, number> = {
   12: 26,
   26: 40,
@@ -25,8 +25,8 @@ export const NEXT_APEX_MAP: Record<number, number> = {
   54: 12,
 };
 
-// Ô cuối cùng của vòng đua (ô chốt chân đích)
-export const FINISH_TRACK_STEP = 54;
+// Ô cửa chuồng sau đúng 1 vòng quanh bàn cờ (55 bước từ ô xuất phát)
+export const FINISH_TRACK_STEP = 55;
 
 export function getAbsoluteTrackPos(color: CaNguaColor, relativeStep: number): number | null {
   if (relativeStep < 0 || relativeStep > FINISH_TRACK_STEP) return null;
@@ -45,11 +45,11 @@ export function updateHorseDerivedFields(horse: CaNguaHorse): void {
     horse.trackPosition = getAbsoluteTrackPos(horse.color, horse.step) ?? -1;
     horse.barnStep = -1;
     horse.isFinished = false;
-  } else if (horse.step >= 55 && horse.step <= 60) {
-    horse.state = horse.step === 60 ? 'FINISHED' : 'IN_BARN';
+  } else if (horse.step >= 56 && horse.step <= 61) {
+    horse.state = 'IN_BARN';
     horse.trackPosition = -1;
-    horse.barnStep = horse.step - 54; // Bậc thang 1..6
-    horse.isFinished = horse.step === 60;
+    horse.barnStep = horse.step - 55; // Bậc thang 1..6
+    horse.isFinished = horse.barnStep === 6;
   }
 }
 
@@ -105,7 +105,36 @@ export function initCoCaNguaState(
   };
 }
 
-export function canHorseBayO(
+/**
+ * Kiểm tra xem đường đi trên track có bị cờ đối phương chặn không.
+ * Quy tắc người dùng: "Khi có quân cờ chặn đường thì trừ khi là cờ quân mình, còn lại sẽ ko được vượt"
+ */
+export function isTrackPathBlockedByOpponent(
+  state: CoCaNguaState,
+  color: CaNguaColor,
+  currentStep: number,
+  dice: number
+): boolean {
+  const startPos = COLOR_CONFIG[color].startPos;
+  for (let s = 1; s < dice; s++) {
+    const interTrackPos = (startPos + currentStep + s) % TRACK_CELL_COUNT;
+    for (const player of state.players) {
+      if (player.color === color) continue; // Trừ khi là cờ quân mình, được phép vượt
+      for (const h of player.horses) {
+        if (h.state === 'ON_TRACK' && h.trackPosition === interTrackPos) {
+          return true; // Bị quân cờ đối phương chặn đường!
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Nhảy cóc đến cửa chuồng tiếp theo:
+ * Quy tắc: "Khi các quân đứng trên 1 ô cửa chuồng, nếu lắc ra 1 thì được phép nhảy cóc đến ô cửa chuồng tiếp (miễn không quá 1 vòng theo quy định là được)"
+ */
+export function canHorseJumpGate(
   state: CoCaNguaState,
   color: CaNguaColor,
   horse: CaNguaHorse,
@@ -115,13 +144,16 @@ export function canHorseBayO(
   if (horse.state !== 'ON_TRACK' || horse.trackPosition < 0) return false;
   if (!APEX_CELLS.includes(horse.trackPosition as (typeof APEX_CELLS)[number])) return false;
 
+  // Quy tắc: Miễn không quá 1 vòng theo quy định là được (step + 14 <= FINISH_TRACK_STEP = 55)
+  if (horse.step + 14 > FINISH_TRACK_STEP) return false;
+
   const targetTrackPos = NEXT_APEX_MAP[horse.trackPosition];
   if (targetTrackPos === undefined) return false;
 
   const player = state.players.find((p) => p.color === color);
   if (!player) return false;
 
-  // Không được bay nếu ô chốt đích đến đã có quân của phe mình
+  // Không được nhảy nếu ô cửa chuồng tiếp theo đã có quân mình
   const ownHorseAtTarget = player.horses.some(
     (h) => h.id !== horse.id && h.state === 'ON_TRACK' && h.trackPosition === targetTrackPos
   );
@@ -142,57 +174,72 @@ export function getValidMovesForHorse(
   const horse = player.horses.find((h) => h.id === horseId);
   if (!horse || horse.isFinished) return false;
 
-  // 1. Ngựa trong chuồng (step === -1): Cần 1 hoặc 6 để xuất chuồng
+  // 1. Ngựa trong chuồng (step === -1): Cần 1 hoặc 6 để xuất chuồng vào ô xuất phát (13, 27, 41, 55)
   if (horse.step === -1) {
     if (dice !== 1 && dice !== 6) return false;
-    const ownHorseAtStart = player.horses.some((h) => h.id !== horse.id && h.step === 0);
+    const ownHorseAtStart = player.horses.some(
+      (h) => h.id !== horse.id && h.state === 'ON_TRACK' && h.step === 0
+    );
     return !ownHorseAtStart;
   }
 
-  // 2. Ngựa trên đường đua trước ô chốt đích (0 <= step < 54)
+  // 2. Ngựa trên đường đua trước ô cửa chuồng của mình (0 <= step < FINISH_TRACK_STEP = 55)
   if (horse.step >= 0 && horse.step < FINISH_TRACK_STEP) {
-    // Kiểm tra tính năng Bay Ô 90 độ khi gieo được 1 nút tại ô chốt
-    if (canHorseBayO(state, color, horse, dice)) {
+    // Ưu tiên kiểm tra nhảy cóc nếu đứng trên ô cửa chuồng và lắc ra 1
+    if (canHorseJumpGate(state, color, horse, dice)) {
       return true;
     }
 
     const nextStep = horse.step + dice;
-    // QUY TẮC: Phải gieo đúng số nút để về ô cuối (54). Không được gieo vượt quá (> 54)!
+    // QUY TẮC: Quân cờ phải đi đúng 1 vòng quanh bàn cờ mới tới ô cửa chuồng cùng màu (nextStep <= 55)
     if (nextStep > FINISH_TRACK_STEP) {
       return false;
     }
 
+    // QUY TẮC: Khi có quân cờ chặn đường thì trừ khi là cờ quân mình, còn lại sẽ ko được vượt
+    if (isTrackPathBlockedByOpponent(state, color, horse.step, dice)) {
+      return false;
+    }
+
+    // Ô đích đến không được là cờ quân mình
     const ownHorseAtDest = player.horses.some((h) => h.id !== horse.id && h.step === nextStep);
     return !ownHorseAtDest;
   }
 
-  // 3. Ngựa đang đứng tại ô chốt chân đích (step === 54): "Sau đó mới được gieo nút để về chuồng"
+  // 3. Ngựa đang đứng tại ô cửa chuồng của mình (step === FINISH_TRACK_STEP = 55):
+  // "Dựa vào kết quả tung xúc xắc, bạn đưa quân vào các ô trong chuồng theo thứ tự tiến dần"
   if (horse.step === FINISH_TRACK_STEP) {
-    // Có thể gieo xúc xắc (1..6) để vào thang chuồng bậc tương ứng (54 + dice)
-    const targetBarnStep = 54 + dice;
-    if (targetBarnStep <= 60) {
-      const blockedInBarn = player.horses.some(
-        (h) => h.id !== horse.id && h.step > 54 && h.step <= targetBarnStep
+    const targetBarnSlot = dice;
+    if (targetBarnSlot >= 1 && targetBarnSlot <= 6) {
+      // Ô đích trong chuồng không được có quân cờ của mình
+      const horseAtTargetSlot = player.horses.some(
+        (h) => h.id !== horse.id && h.state === 'IN_BARN' && h.barnStep === targetBarnSlot
       );
-      if (!blockedInBarn) return true;
-    }
+      if (horseAtTargetSlot) return false;
 
-    // Nếu lối vào chuồng bị chặn hoặc muốn bay ô (gieo 1 tại ô chốt)
-    if (canHorseBayO(state, color, horse, dice)) {
+      // Không được vượt qua quân cờ trong chuồng (các ô bậc < targetBarnSlot phải trống)
+      const horseBlockingEntrance = player.horses.some(
+        (h) => h.id !== horse.id && h.state === 'IN_BARN' && h.barnStep < targetBarnSlot
+      );
+      if (horseBlockingEntrance) return false;
+
       return true;
     }
-
     return false;
   }
 
-  // 4. Ngựa đang trong thang chuồng (55 <= step <= 60)
-  if (horse.step >= 55 && horse.step <= 60) {
-    const nextStep = horse.step + dice;
-    if (nextStep > 60) return false; // Không được vượt quá đỉnh chuồng (bậc 6)
-    const blocked = player.horses.some(
-      (h) => h.id !== horse.id && h.step > horse.step && h.step <= nextStep
+  // 4. Ngựa đang trong thang chuồng (state === 'IN_BARN', barnStep >= 1 và < 6):
+  // "ví dụ lắc được 3 thì sau đó phải lắc đk 4 thì mới được tiến lên ô chuồng 4"
+  if (horse.state === 'IN_BARN' && horse.barnStep >= 1 && horse.barnStep < 6) {
+    const nextBarnSlot = horse.barnStep + 1;
+    // Phải lắc đúng số ô chuồng tiếp theo
+    if (dice !== nextBarnSlot) return false;
+
+    // Ô chuồng tiếp theo không được có quân cờ
+    const horseAtNextSlot = player.horses.some(
+      (h) => h.id !== horse.id && h.state === 'IN_BARN' && h.barnStep === nextBarnSlot
     );
-    return !blocked;
+    return !horseAtNextSlot;
   }
 
   return false;
@@ -235,8 +282,8 @@ function checkAndKickOpponents(
   for (const otherPlayer of state.players) {
     if (otherPlayer.color === color) continue;
     for (const otherHorse of otherPlayer.horses) {
-      if (otherHorse.step >= 0 && otherHorse.step <= FINISH_TRACK_STEP) {
-        const otherAbsPos = getAbsoluteTrackPos(otherPlayer.color, otherHorse.step);
+      if (otherHorse.state === 'ON_TRACK') {
+        const otherAbsPos = otherHorse.trackPosition;
         if (otherAbsPos === targetAbsolutePos) {
           otherHorse.step = -1; // Bị đá văng về chuồng
           updateHorseDerivedFields(otherHorse);
@@ -256,6 +303,23 @@ function checkAndKickOpponents(
     }
   }
   return kickedHorseInfo;
+}
+
+/**
+ * Kiểm tra điều kiện thắng:
+ * "có 4 quân thì phải xếp lần lượt 6,5,4,3 để dành chiến thắng"
+ */
+export function checkPlayerWon(player: CaNguaPlayerState): boolean {
+  const barnSteps = player.horses
+    .filter((h) => h.state === 'IN_BARN')
+    .map((h) => h.barnStep);
+
+  return (
+    barnSteps.includes(6) &&
+    barnSteps.includes(5) &&
+    barnSteps.includes(4) &&
+    barnSteps.includes(3)
+  );
 }
 
 export function executeHorseMove(
@@ -281,25 +345,25 @@ export function executeHorseMove(
   let prevPos = horse.trackPosition;
   let targetPos = -1;
 
-  // 1. Xuất chuồng
+  // 1. Xuất chuồng (step === -1)
   if (horse.step === -1) {
     horse.step = 0;
     updateHorseDerivedFields(horse);
     const destAbsolutePos = COLOR_CONFIG[color].startPos;
     kickedHorseInfo = checkAndKickOpponents(state, color, destAbsolutePos);
   }
-  // 2. Ngựa trên đường đua trước ô chốt đích (0 <= step < 54)
+  // 2. Ngựa trên đường đua (0 <= step < FINISH_TRACK_STEP = 55)
   else if (horse.step >= 0 && horse.step < FINISH_TRACK_STEP) {
-    if (canHorseBayO(state, color, horse, dice)) {
-      // KÍCH HOẠT BAY Ô 90 ĐỘ
+    if (canHorseJumpGate(state, color, horse, dice)) {
+      // NHẢY CÓC CỬA CHUỒNG (14 ô track)
       isBayO = true;
       prevPos = horse.trackPosition;
       targetPos = NEXT_APEX_MAP[prevPos];
-      horse.step = horse.step + 14; // Bay 90 độ = tiến 14 ô chốt
+      horse.step = horse.step + 14;
       updateHorseDerivedFields(horse);
       kickedHorseInfo = checkAndKickOpponents(state, color, targetPos);
     } else {
-      // Di chuyển bình thường trên đường đua
+      // Di chuyển bình thường
       const nextStep = horse.step + dice;
       horse.step = nextStep;
       updateHorseDerivedFields(horse);
@@ -309,39 +373,16 @@ export function executeHorseMove(
       }
     }
   }
-  // 3. Ngựa đang đứng tại ô chốt chân đích (step === 54): Về chuồng hoặc Bay Ô
+  // 3. Ngựa đang đứng tại ô cửa chuồng của mình (step === FINISH_TRACK_STEP = 55)
   else if (horse.step === FINISH_TRACK_STEP) {
-    const targetBarnStep = 54 + dice;
-    const blockedInBarn = player.horses.some(
-      (h) => h.id !== horse.id && h.step > 54 && h.step <= targetBarnStep
-    );
-
-    if (!blockedInBarn) {
-      enteredBarn = true;
-      horse.step = targetBarnStep;
-      if (horse.step === 60) {
-        horse.isFinished = true;
-        finished = true;
-      }
-      updateHorseDerivedFields(horse);
-    } else if (canHorseBayO(state, color, horse, dice)) {
-      // Nếu lối vào chuồng bị chặn, có thể kích hoạt Bay Ô
-      isBayO = true;
-      prevPos = horse.trackPosition;
-      targetPos = NEXT_APEX_MAP[prevPos];
-      horse.step = 12; // Bắt đầu vòng tiếp theo
-      updateHorseDerivedFields(horse);
-      kickedHorseInfo = checkAndKickOpponents(state, color, targetPos);
-    }
+    const targetBarnSlot = dice;
+    enteredBarn = true;
+    horse.step = 55 + targetBarnSlot;
+    updateHorseDerivedFields(horse);
   }
-  // 4. Ngựa đang trong thang chuồng (55 <= step < 60)
-  else if (horse.step >= 55 && horse.step < 60) {
-    const nextStep = horse.step + dice;
-    horse.step = nextStep;
-    if (horse.step === 60) {
-      horse.isFinished = true;
-      finished = true;
-    }
+  // 4. Ngựa đang trong thang chuồng (state === 'IN_BARN')
+  else if (horse.state === 'IN_BARN') {
+    horse.step = horse.step + 1; // Tiến lên bậc tiếp theo
     updateHorseDerivedFields(horse);
   }
 
@@ -352,8 +393,8 @@ export function executeHorseMove(
   // Cập nhật mảng tổng hợp horses trên state
   state.horses = state.players.flatMap((p) => p.horses);
 
-  // Kiểm tra điều kiện thắng
-  const isWinner = player.horses.every((h) => h.isFinished || h.step >= 57);
+  // Kiểm tra điều kiện thắng: 4 quân xếp lần lượt 6, 5, 4, 3
+  const isWinner = checkPlayerWon(player);
 
   if (isWinner && !state.winnerColor) {
     state.winnerColor = color;
@@ -370,7 +411,7 @@ export function executeHorseMove(
 
   let actionMessage = '';
   if (isBayO) {
-    actionMessage = `${player.playerName} gieo 1 - 🚀 KÍCH HOẠT BAY Ô 90° (từ ô ${prevPos} ➔ ô ${targetPos})!`;
+    actionMessage = `${player.playerName} lắc ra 1 - 🐸 NHẢY CÓC CỬA CHUỒNG (từ ô ${prevPos} ➔ ô ${targetPos})!`;
     if (kickedHorseInfo) {
       actionMessage += ` 💥 ĐÁ VĂNG NGỰA của ${kickedHorseInfo.playerName} về chuồng!`;
     } else {
@@ -378,14 +419,14 @@ export function executeHorseMove(
     }
   } else if (kickedHorseInfo) {
     actionMessage = `${player.playerName} di chuyển ngựa #${horse.horseIndex + 1} (${dice} nút). 💥 ĐÁ VĂNG NGỰA của ${kickedHorseInfo.playerName} về chuồng! Được gieo tiếp.`;
-  } else if (finished) {
-    actionMessage = `${player.playerName} đưa ngựa #${horse.horseIndex + 1} lên đỉnh chuồng (Bậc 6) - 🏆 VỀ ĐÍCH THÀNH CÔNG!`;
+  } else if (isWinner) {
+    actionMessage = `🏆 ${player.playerName} ĐÃ XẾP ĐỦ 4 QUÂN VÀO CHUỒNG 6, 5, 4, 3 VÀ GIÀNH CHIẾN THẮNG TUYỆT ĐỐI!`;
   } else if (enteredBarn) {
-    actionMessage = `${player.playerName} gieo ${dice} nút - Ngựa #${horse.horseIndex + 1} VÀO THANG CHUỒNG BẬC ${horse.barnStep}!`;
+    actionMessage = `${player.playerName} gieo ${dice} nút - Ngựa #${horse.horseIndex + 1} VÀO CHUỒNG Ô ${horse.barnStep}!`;
+  } else if (horse.state === 'IN_BARN') {
+    actionMessage = `${player.playerName} gieo ${dice} nút - Ngựa #${horse.horseIndex + 1} TIẾN LÊN Ô CHUỒNG ${horse.barnStep}!`;
   } else if (horse.step === FINISH_TRACK_STEP) {
-    actionMessage = `${player.playerName} di chuyển ngựa #${horse.horseIndex + 1} (${dice} nút) ĐÁP CHÍNH XÁC VÀO Ô CHỐT VỀ ĐÍCH #${horse.trackPosition}! Chuẩn bị lên chuồng.`;
-  } else if (horse.step > 54) {
-    actionMessage = `${player.playerName} đưa ngựa #${horse.horseIndex + 1} lên thang chuồng bậc ${horse.barnStep}!`;
+    actionMessage = `${player.playerName} đưa ngựa #${horse.horseIndex + 1} ĐẾN Ô CỬA CHUỒNG (ô ${horse.trackPosition})! Đã hoàn thành 1 vòng.`;
   } else {
     actionMessage = `${player.playerName} di chuyển ngựa #${horse.horseIndex + 1} (${dice} nút).`;
     if (extraTurn) {

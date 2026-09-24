@@ -290,7 +290,10 @@ export const BanCoCaNgua: React.FC<BanCoCaNguaProps> = ({
   const isHorseSelectable = (horse: CaNguaHorse) => {
     if (!isMyTurn || coCaNgua?.phase !== 'SELECTING_HORSE') return false;
     if (horse.playerId !== myPlayerId) return false;
-    const dice = coCaNgua.lastDiceValue;
+    if (Array.isArray(coCaNgua?.movableHorseIds)) {
+      return coCaNgua.movableHorseIds.includes(horse.id);
+    }
+    const dice = coCaNgua?.lastDiceValue;
     if (!dice) return false;
     if (horse.state === 'STABLE') {
       return dice === 1 || dice === 6;
@@ -306,9 +309,9 @@ export const BanCoCaNgua: React.FC<BanCoCaNguaProps> = ({
       coCaNgua?.horses.filter(
         (h) => h.color === color && h.state === 'STABLE'
       ) || [];
-    const finishedHorses =
+    const winningHorses =
       coCaNgua?.horses.filter(
-        (h) => h.color === color && h.state === 'FINISHED'
+        (h) => h.color === color && h.state === 'IN_BARN' && [3, 4, 5, 6].includes(h.barnStep)
       ) || [];
 
     const isCurrentPlayerColor = currentTurnPlayer?.color === color;
@@ -389,11 +392,11 @@ export const BanCoCaNgua: React.FC<BanCoCaNguaProps> = ({
           })}
         </div>
 
-        {/* Footer: Tiến độ về đích */}
+        {/* Footer: Tiến độ về đích (cần xếp 6, 5, 4, 3) */}
         <div className="flex items-center justify-between text-[10px] text-amber-200/80 z-10 bg-black/30 px-2 py-0.5 rounded-lg border border-amber-900/30">
-          <span className="font-semibold">Về đích:</span>
+          <span className="font-semibold">Chuồng 6,5,4,3:</span>
           <span className="font-black text-amber-300">
-            {finishedHorses.length}/4 🏆
+            {winningHorses.length}/4 🏆
           </span>
         </div>
       </div>
@@ -463,13 +466,10 @@ export const BanCoCaNgua: React.FC<BanCoCaNguaProps> = ({
       return (
         <div
           key="center-goal"
-          className="relative rounded-2xl bg-gradient-to-br from-amber-500 via-yellow-400 to-amber-600 border-2 border-yellow-200 flex flex-col items-center justify-center p-1 shadow-2xl shadow-amber-500/50 ring-2 ring-amber-300 animate-pulse z-20"
+          className="relative rounded-2xl bg-gradient-to-br from-amber-500 via-yellow-400 to-amber-600 border-2 border-yellow-200 flex items-center justify-center p-1 shadow-2xl shadow-amber-500/50 ring-2 ring-amber-300 animate-pulse z-20"
         >
-          <div className="w-full h-full rounded-xl bg-gradient-to-tr from-amber-600/60 to-yellow-300/40 flex flex-col items-center justify-center">
+          <div className="w-full h-full rounded-xl bg-gradient-to-tr from-amber-600/60 to-yellow-300/40 flex items-center justify-center">
             <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-slate-950 filter drop-shadow" />
-            <span className="text-[7px] sm:text-[8px] font-black text-slate-950 uppercase tracking-tighter mt-0.5">
-              ĐÍCH VỀ
-            </span>
           </div>
         </div>
       );
@@ -532,15 +532,15 @@ export const BanCoCaNgua: React.FC<BanCoCaNguaProps> = ({
     const horsesOnTrack =
       trackIndex !== -1 ? trackHorsesMap.get(trackIndex) || [] : [];
 
-    const isRedStart = trackIndex === 0;
-    const isBlueStart = trackIndex === 14;
-    const isYellowStart = trackIndex === 28;
-    const isGreenStart = trackIndex === 42;
+    const isRedStart = trackIndex === 55;
+    const isBlueStart = trackIndex === 13;
+    const isYellowStart = trackIndex === 27;
+    const isGreenStart = trackIndex === 41;
 
-    const isBlueApex = trackIndex === 12; // Dưới chân thang Blue
-    const isYellowApex = trackIndex === 26; // Dưới chân thang Yellow
-    const isGreenApex = trackIndex === 40; // Dưới chân thang Green
-    const isRedApex = trackIndex === 54; // Dưới chân thang Red
+    const isBlueApex = trackIndex === 12; // Cửa chuồng Blue
+    const isYellowApex = trackIndex === 26; // Cửa chuồng Yellow
+    const isGreenApex = trackIndex === 40; // Cửa chuồng Green
+    const isRedApex = trackIndex === 54; // Cửa chuồng Red
     const isApexCell = isBlueApex || isYellowApex || isGreenApex || isRedApex;
 
     const isHighlighted =
@@ -585,67 +585,32 @@ export const BanCoCaNgua: React.FC<BanCoCaNguaProps> = ({
             : 'hover:border-amber-700'
         }`}
       >
-        {/* Nhãn xuất phát đặc trưng */}
-        {isRedStart && (
-          <span className="text-[7px] sm:text-[8px] font-black text-rose-300 tracking-tighter">
-            XP ĐỎ
-          </span>
-        )}
-        {isBlueStart && (
-          <span className="text-[7px] sm:text-[8px] font-black text-blue-300 tracking-tighter">
-            XP XANH
-          </span>
-        )}
-        {isYellowStart && (
-          <span className="text-[7px] sm:text-[8px] font-black text-amber-300 tracking-tighter">
-            XP VÀNG
-          </span>
-        )}
-        {isGreenStart && (
-          <span className="text-[7px] sm:text-[8px] font-black text-emerald-300 tracking-tighter">
-            XP LÁ
+        {/* Nhãn xuất phát: các ô XP chỉ cần ghi XP */}
+        {(isRedStart || isBlueStart || isYellowStart || isGreenStart) && (
+          <span className="text-[7.5px] sm:text-[9px] font-black text-amber-200 tracking-wider">
+            XP
           </span>
         )}
 
-        {/* Nhãn 4 ô chốt chân thang về đích & kích hoạt Bay Ô 90° */}
+        {/* Ô cửa chuồng: không cần ghi text, vẽ 1 vòng tròn lồng ngoài chấm tròn cùng màu */}
         {isRedApex && (
-          <div className="flex flex-col items-center leading-none">
-            <span className="text-[7px] sm:text-[8px] font-black text-rose-300 tracking-tighter flex items-center gap-0.5">
-              54 🚀
-            </span>
-            <span className="text-[5.5px] sm:text-[6px] text-rose-400/80 font-bold uppercase tracking-tight">
-              Đích Đỏ
-            </span>
+          <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-rose-400/90 flex items-center justify-center">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-rose-500 shadow-sm" />
           </div>
         )}
         {isBlueApex && (
-          <div className="flex flex-col items-center leading-none">
-            <span className="text-[7px] sm:text-[8px] font-black text-blue-300 tracking-tighter flex items-center gap-0.5">
-              12 🚀
-            </span>
-            <span className="text-[5.5px] sm:text-[6px] text-blue-400/80 font-bold uppercase tracking-tight">
-              Đích Xanh
-            </span>
+          <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-blue-400/90 flex items-center justify-center">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-500 shadow-sm" />
           </div>
         )}
         {isYellowApex && (
-          <div className="flex flex-col items-center leading-none">
-            <span className="text-[7px] sm:text-[8px] font-black text-amber-300 tracking-tighter flex items-center gap-0.5">
-              26 🚀
-            </span>
-            <span className="text-[5.5px] sm:text-[6px] text-amber-400/80 font-bold uppercase tracking-tight">
-              Đích Vàng
-            </span>
+          <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-amber-400/90 flex items-center justify-center">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-amber-400 shadow-sm" />
           </div>
         )}
         {isGreenApex && (
-          <div className="flex flex-col items-center leading-none">
-            <span className="text-[7px] sm:text-[8px] font-black text-emerald-300 tracking-tighter flex items-center gap-0.5">
-              40 🚀
-            </span>
-            <span className="text-[5.5px] sm:text-[6px] text-emerald-400/80 font-bold uppercase tracking-tight">
-              Đích Lá
-            </span>
+          <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-emerald-400/90 flex items-center justify-center">
+            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 shadow-sm" />
           </div>
         )}
 
@@ -673,8 +638,8 @@ export const BanCoCaNgua: React.FC<BanCoCaNguaProps> = ({
               return (
                 <div key={h.id} className="relative flex items-center justify-center">
                   {isBayOCandidate && (
-                    <span className="absolute -top-3.5 whitespace-nowrap bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-[7px] px-1 py-0.2 rounded-full shadow-lg border border-white animate-bounce z-30 pointer-events-none">
-                      🚀 BAY Ô
+                    <span className="absolute -top-3.5 whitespace-nowrap bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-[7px] px-1.5 py-0.2 rounded-full shadow-lg border border-white animate-bounce z-30 pointer-events-none">
+                      🐸 NHẢY CÓC
                     </span>
                   )}
                   <HorsePawn

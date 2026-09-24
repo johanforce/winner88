@@ -15,9 +15,10 @@ export function createInitialChessState(
     whitePlayerId,
     blackPlayerId,
     spectatorIds,
-    whiteTimeRemaining: 600, // 10 phút tiêu chuẩn (600 giây)
-    blackTimeRemaining: 600,
-    initialTime: 600,
+    whiteTimeRemaining: 900, // 15 phút tiêu chuẩn (900 giây)
+    blackTimeRemaining: 900,
+    initialTime: 900,
+    increment: 10, // Cộng thêm 10 giây mỗi nước đi
     lastMove: null,
     moveHistory: [],
     isCheck: false,
@@ -126,19 +127,32 @@ export function executeChessMove(
       winReason = 'FIFTY_MOVES';
     }
 
-    // Trigger Grandmaster commentary for spectators at key milestones:
-    // Move 4 (opening revealed), Move 8, every 6 moves thereafter (14, 20, 26...),
-    // or on significant game events (Queen capture or Checkmate)
+    // Trigger Grandmaster commentary for spectators:
+    // Đánh giá thế trận sau mỗi 5 nước đi của cả 2 người chơi (tức mỗi 10 ply / 10 nửa nước: 10, 20, 30...),
+    // hoặc khi có đòn chiếu bí kết thúc ván đấu (Checkmate).
     const count = newHistory.length;
-    const isKeyMilestone = count === 4 || count === 8 || (count > 8 && (count - 8) % 6 === 0);
-    const isMajorTacticalEvent = moveResult.captured === 'q' || isCheckmate;
-    const triggerAiAnalysis = count > 0 && (isKeyMilestone || isMajorTacticalEvent);
+    const isTenPlyMilestone = count > 0 && count % 10 === 0;
+    const triggerAiAnalysis = isTenPlyMilestone || isCheckmate;
+
+    // Cộng thêm 10 giây cho kỳ thủ vừa thực hiện nước đi (FIDE increment +10s)
+    const movingSide = currentState.turn;
+    const incrementSeconds = currentState.increment || 10;
+    const newWhiteTime =
+      movingSide === 'WHITE'
+        ? currentState.whiteTimeRemaining + incrementSeconds
+        : currentState.whiteTimeRemaining;
+    const newBlackTime =
+      movingSide === 'BLACK'
+        ? currentState.blackTimeRemaining + incrementSeconds
+        : currentState.blackTimeRemaining;
 
     const newState: ChessState = {
       ...currentState,
       fen: nextFen,
       pgn: nextPgn,
       turn: nextTurn,
+      whiteTimeRemaining: newWhiteTime,
+      blackTimeRemaining: newBlackTime,
       lastMove: record,
       moveHistory: newHistory,
       isCheck,

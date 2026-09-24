@@ -783,7 +783,7 @@ export class GameRoom {
       });
 
       this.addSystemChat(
-        `♟️ TRẬN ĐẤU CỜ VUA TIÊU CHUẨN ĐÃ BẮT ĐẦU! Quân Trắng (${whitePlayer.name}) ⚔️ Quân Đen (${blackPlayer.name}). Thời gian: 10 phút/bên. Cứ sau mỗi 10 nước đi, Trợ lý AI (Gemini) sẽ gửi nhận định thế cờ cho khán giả!`
+        `♟️ TRẬN ĐẤU CỜ VUA TIÊU CHUẨN ĐÃ BẮT ĐẦU! Quân Trắng (${whitePlayer.name}) ⚔️ Quân Đen (${blackPlayer.name}). Thời gian: 15 phút/bên (+10s mỗi nước đi). Cứ sau mỗi 5 nước đi của cả 2 người chơi (mỗi 10 ply), Trợ lý AI sẽ gửi nhận định thế cờ cho khán giả!`
       );
 
       this.startChessTimer();
@@ -1884,6 +1884,10 @@ export class GameRoom {
     const nextPlayerId =
       this.chessState.turn === 'WHITE' ? this.chessState.whitePlayerId : this.chessState.blackPlayerId;
     this.currentTurnPlayerId = nextPlayerId;
+    this.turnTimeRemaining =
+      this.chessState.turn === 'WHITE'
+        ? this.chessState.whiteTimeRemaining
+        : this.chessState.blackTimeRemaining;
 
     if (this.chessState.winnerSide) {
       this.stopTimer();
@@ -1942,7 +1946,15 @@ export class GameRoom {
         blackName
       );
 
-      analyzeChessPosition(currentPgn, currentFen, moveCount, whiteName, blackName, localEval)
+      analyzeChessPosition(
+        currentPgn,
+        currentFen,
+        moveCount,
+        whiteName,
+        blackName,
+        localEval,
+        this.chessState.isCheckmate
+      )
         .then((analysis) => {
           if (!this.chessState) return;
           // isSpectatorOnly = true: Chỉ khách mới xem được bình luận này, 2 người chơi không xem được

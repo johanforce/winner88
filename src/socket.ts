@@ -1,68 +1,92 @@
 import { io, Socket } from 'socket.io-client';
 
-// Generate or retrieve persistent player ID and session token
-export function getOrCreatePlayerProfile(): {
+export interface PlayerProfile {
   id: string;
   name: string;
   avatar: string;
   reconnectToken: string;
   score: number;
-} {
-  // Use sessionStorage for tab-specific ID so testing 2+ tabs on same machine works without collision!
-  let id = sessionStorage.getItem('cardgame_player_id');
-  if (!id) {
-    id = 'p_' + Math.random().toString(36).substring(2, 11);
-    sessionStorage.setItem('cardgame_player_id', id);
-  }
-
-  // Name and avatar can be loaded from sessionStorage or localStorage
-  let name = sessionStorage.getItem('cardgame_player_name') || localStorage.getItem('cardgame_player_name') || '';
-  let avatar = sessionStorage.getItem('cardgame_player_avatar') || localStorage.getItem('cardgame_player_avatar') || '🤠';
-
-  let reconnectToken = sessionStorage.getItem('cardgame_reconnect_token');
-  if (!reconnectToken) {
-    reconnectToken = 'tok_' + Math.random().toString(36).substring(2, 15);
-    sessionStorage.setItem('cardgame_reconnect_token', reconnectToken);
-  }
-
-  const rawScore = sessionStorage.getItem('cardgame_player_score') || localStorage.getItem('cardgame_player_score');
-  const score = rawScore ? parseInt(rawScore, 10) : 1000;
-
-  return { id, name, avatar, reconnectToken, score };
 }
 
-export function savePlayerProfile(name: string, avatar: string, score?: number) {
-  sessionStorage.setItem('cardgame_player_name', name);
-  sessionStorage.setItem('cardgame_player_avatar', avatar);
-  localStorage.setItem('cardgame_player_name', name);
-  localStorage.setItem('cardgame_player_avatar', avatar);
-  if (typeof score === 'number') {
-    savePlayerScore(score);
+export const socket: Socket = io(typeof window !== 'undefined' ? window.location.origin : '', {
+  transports: ['websocket', 'polling'],
+  autoConnect: true,
+});
+
+const PROFILE_KEY = 'winner88_player_profile';
+const LAST_ROOM_KEY = 'winner88_last_room_code';
+
+export function getOrCreatePlayerProfile(): PlayerProfile {
+  if (typeof window === 'undefined') {
+    return { id: 'p_guest', name: '', avatar: '🤠', reconnectToken: 'tok_guest', score: 1000 };
+  }
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.id && parsed.reconnectToken) {
+        return parsed;
+      }
+    }
+  } catch {
+    // fallback
+  }
+
+  const id = 'p_' + Math.random().toString(36).substring(2, 9);
+  const reconnectToken = 'tok_' + Math.random().toString(36).substring(2, 12);
+  const newProfile: PlayerProfile = {
+    id,
+    name: '',
+    avatar: '🤠',
+    reconnectToken,
+    score: 1000,
+  };
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(newProfile));
+  } catch {
+    // ignore
+  }
+  return newProfile;
+}
+
+export function savePlayerProfile(profile: PlayerProfile) {
+  try {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  } catch {
+    // ignore
   }
 }
 
 export function savePlayerScore(score: number) {
-  sessionStorage.setItem('cardgame_player_score', score.toString());
-  localStorage.setItem('cardgame_player_score', score.toString());
+  try {
+    const current = getOrCreatePlayerProfile();
+    current.score = score;
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(current));
+  } catch {
+    // ignore
+  }
 }
 
 export function saveLastRoomCode(code: string) {
-  sessionStorage.setItem('cardgame_last_room', code);
+  try {
+    localStorage.setItem(LAST_ROOM_KEY, code);
+  } catch {
+    // ignore
+  }
 }
 
 export function getLastRoomCode(): string | null {
-  return sessionStorage.getItem('cardgame_last_room');
+  try {
+    return localStorage.getItem(LAST_ROOM_KEY);
+  } catch {
+    return null;
+  }
 }
 
 export function clearLastRoomCode() {
-  sessionStorage.removeItem('cardgame_last_room');
+  try {
+    localStorage.removeItem(LAST_ROOM_KEY);
+  } catch {
+    // ignore
+  }
 }
-
-// Global socket singleton
-export const socket: Socket = io({
-  autoConnect: true,
-  reconnection: true,
-  reconnectionAttempts: 20,
-  reconnectionDelay: 1000,
-  transports: ['websocket', 'polling'],
-});

@@ -14,7 +14,6 @@ import {
   History,
   MessageSquare,
   Users,
-  Palette,
   ShieldAlert,
 } from 'lucide-react';
 import { RoomPublicState, ChatMessage, ChessSide } from '../types';
@@ -34,41 +33,7 @@ interface BanCoVuaProps {
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
-// Theme definitions for the chessboard
-type BoardTheme = 'wood' | 'tournament';
-
-const BOARD_THEMES: Record<
-  BoardTheme,
-  {
-    name: string;
-    lightSquare: string;
-    darkSquare: string;
-    bezelBg: string;
-    bezelBorder: string;
-    coordLight: string;
-    coordDark: string;
-  }
-> = {
-  wood: {
-    name: 'Gỗ Trầm Cổ Điển',
-    lightSquare: 'bg-[#f0d9b5]',
-    darkSquare: 'bg-[#b58863]',
-    bezelBg: 'bg-gradient-to-br from-[#38220f] via-[#241407] to-[#1a0e05]',
-    bezelBorder: 'border-[#5c3a1e]',
-    coordLight: 'text-[#b58863]',
-    coordDark: 'text-[#f0d9b5]',
-  },
-  tournament: {
-    name: 'Xanh FIDE Giải Đấu',
-    lightSquare: 'bg-[#eeeed2]',
-    darkSquare: 'bg-[#769656]',
-    bezelBg: 'bg-gradient-to-br from-[#1a2e22] via-[#0f1c14] to-[#08100b]',
-    bezelBorder: 'border-[#2d4d38]',
-    coordLight: 'text-[#769656]',
-    coordDark: 'text-[#eeeed2]',
-  },
-};
-
+// Standard piece point values
 const PIECE_VALS: Record<string, number> = {
   p: 1,
   n: 3,
@@ -112,7 +77,6 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
   // Board orientation: black on bottom if I am black; otherwise white on bottom
   const [isFlipped, setIsFlipped] = useState<boolean>(mySide === 'BLACK');
-  const [boardTheme, setBoardTheme] = useState<BoardTheme>('wood');
 
   // Selected square e.g. 'e2'
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
@@ -202,7 +166,6 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
   // Calculate captured pieces and material score
   const { whiteCaptured, blackCaptured, whiteMaterialAdv, blackMaterialAdv } = useMemo(() => {
-    // Initial piece counts
     const initialCounts: Record<string, number> = {
       p: 8,
       n: 2,
@@ -233,9 +196,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
       }
     }
 
-    // Pieces captured by White (i.e. missing black pieces)
     const whiteCapturedList: { type: 'p' | 'n' | 'b' | 'r' | 'q'; count: number }[] = [];
-    // Pieces captured by Black (i.e. missing white pieces)
     const blackCapturedList: { type: 'p' | 'n' | 'b' | 'r' | 'q'; count: number }[] = [];
 
     const order: ('q' | 'r' | 'b' | 'n' | 'p')[] = ['q', 'r', 'b', 'n', 'p'];
@@ -318,7 +279,6 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
     // 2. If a piece was selected and clicking a target square
     if (selectedSquare) {
       if (legalTargetSquares.has(square)) {
-        // Check if pawn promotion is needed
         const movingPiece = chess.get(selectedSquare as any);
         const isPawn = movingPiece && movingPiece.type === 'p';
         const isPromoting =
@@ -446,9 +406,6 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
   const displayFiles = isFlipped ? [...FILES].reverse() : FILES;
   const displayRanks = isFlipped ? [...RANKS].reverse() : RANKS;
 
-  // Active theme configuration
-  const theme = BOARD_THEMES[boardTheme];
-
   const isIncomingDrawOffer =
     chessState?.drawOfferFrom &&
     mySide &&
@@ -456,17 +413,17 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
     !chessState.winnerSide;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col select-none">
+    <div className="min-h-screen bg-[#161512] text-slate-100 flex flex-col select-none">
       {/* Top Header Navigation */}
-      <header className="bg-slate-900/95 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shadow-md shrink-0">
+      <header className="bg-[#1f1e1b] border-b border-[#2d2b27] px-4 py-2.5 flex items-center justify-between shadow-md shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2.5">
             <span className="text-2xl drop-shadow">♟️</span>
             <div>
               <h1 className="font-black text-sm text-white flex items-center gap-2">
                 <span>CỜ VUA TIÊU CHUẨN</span>
-                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-600/60 px-1.5 py-0.5 rounded font-bold">
-                  FIDE 10M
+                <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700/60 px-1.5 py-0.5 rounded font-bold">
+                  15+10 RAPID
                 </span>
                 {isSpectator && (
                   <span className="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-700 px-1.5 py-0.5 rounded font-bold">
@@ -474,7 +431,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                   </span>
                 )}
               </h1>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-stone-400">
                 Phòng: <span className="font-mono font-bold text-amber-400">{roomState.code}</span>
               </p>
             </div>
@@ -483,21 +440,11 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
         {/* Header Action Buttons */}
         <div className="flex items-center gap-2">
-          {/* Board Theme Toggle */}
-          <button
-            onClick={() => setBoardTheme(boardTheme === 'wood' ? 'tournament' : 'wood')}
-            title={`Đổi giao diện: ${boardTheme === 'wood' ? 'Xanh FIDE' : 'Gỗ Trầm'}`}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
-          >
-            <Palette className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">{theme.name}</span>
-          </button>
-
           {/* Flip Board */}
           <button
             onClick={() => setIsFlipped(!isFlipped)}
             title="Xoay hướng bàn cờ"
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+            className="px-2.5 py-1.5 bg-[#2b2926] hover:bg-[#36332f] border border-[#3d3a36] rounded-xl text-xs font-semibold text-stone-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Xoay bàn</span>
@@ -506,7 +453,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
           {/* Rules Modal */}
           <button
             onClick={() => setIsRuleModalOpen(true)}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+            className="px-2.5 py-1.5 bg-[#2b2926] hover:bg-[#36332f] border border-[#3d3a36] rounded-xl text-xs font-semibold text-stone-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
           >
             <BookOpen className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">Luật chơi</span>
@@ -524,11 +471,11 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
       </header>
 
       {/* Main Playing Area */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden max-w-7xl mx-auto w-full p-2 sm:p-4 gap-4">
+      <div className="flex-1 flex flex-col lg:flex-row items-center justify-center overflow-hidden max-w-7xl mx-auto w-full p-2 sm:p-4 gap-5">
         {/* Left / Center Board Column */}
-        <div className="flex-1 flex flex-col items-center justify-center min-w-0">
-          {/* Top Player Bar (Opponent or Black if normal) */}
-          <div className="w-full max-w-[560px] mb-2">
+        <div className="flex flex-col items-center justify-center w-full max-w-[560px]">
+          {/* Top Player Bar */}
+          <div className="w-full mb-1.5">
             {renderPlayerBar(
               isFlipped ? whitePlayer : blackPlayer,
               isFlipped ? 'WHITE' : 'BLACK',
@@ -537,18 +484,10 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             )}
           </div>
 
-          {/* Chessboard Container with Luxury Bezel */}
-          <div
-            className={`relative w-full max-w-[560px] aspect-square p-2.5 sm:p-3.5 rounded-2xl shadow-2xl border-4 ${theme.bezelBorder} ${theme.bezelBg} flex flex-col justify-center transition-colors duration-300`}
-          >
-            {/* Corner Decorative Studs */}
-            <div className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-amber-500/30 border border-amber-400/40" />
-            <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500/30 border border-amber-400/40" />
-            <div className="absolute bottom-1.5 left-1.5 w-2 h-2 rounded-full bg-amber-500/30 border border-amber-400/40" />
-            <div className="absolute bottom-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500/30 border border-amber-400/40" />
-
+          {/* Exact Chess.com Green & Cream Chessboard from user image */}
+          <div className="relative w-full aspect-square rounded-sm overflow-hidden shadow-2xl border border-black/30 select-none bg-[#779556]">
             {/* The 8x8 Grid */}
-            <div className="grid grid-cols-8 grid-rows-8 w-full h-full rounded-xl overflow-hidden shadow-inner border border-black/30">
+            <div className="grid grid-cols-8 grid-rows-8 w-full h-full">
               {displayRanks.map((rank, rIdx) =>
                 displayFiles.map((file, fIdx) => {
                   const square = `${file}${rank}`;
@@ -565,51 +504,47 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                     <div
                       key={square}
                       onClick={() => handleSquareClick(square)}
-                      className={`relative flex items-center justify-center cursor-pointer transition-all duration-150 select-none ${
-                        isLightSquare ? theme.lightSquare : theme.darkSquare
+                      className={`relative flex items-center justify-center cursor-pointer select-none transition-colors duration-100 ${
+                        isLightSquare ? 'bg-[#ebecd0]' : 'bg-[#779556]'
                       } ${
                         isSelected
-                          ? '!bg-[#f7c04a] ring-2 ring-amber-300 ring-inset shadow-inner'
-                          : ''
-                      } ${
-                        isLastMove && !isSelected
-                          ? '!bg-[#cdd26a]/90 ring-1 ring-amber-400/40'
+                          ? '!bg-[#f5f682]'
+                          : isLastMove
+                          ? '!bg-[#bbcb2b]'
                           : ''
                       } ${
                         isKingInCheck
-                          ? '!bg-gradient-to-r from-rose-600 to-red-600 animate-pulse ring-4 ring-rose-400'
+                          ? '!bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-rose-600 via-red-600 to-rose-700/80 animate-pulse'
                           : ''
                       }`}
                     >
-                      {/* Rank Label on left column */}
+                      {/* Rank Label on left file squares (Top-Left corner) */}
                       {fIdx === 0 && (
                         <span
-                          className={`absolute top-0.5 left-1 text-[10px] font-black select-none pointer-events-none opacity-80 ${
-                            isLightSquare ? theme.coordLight : theme.coordDark
+                          className={`absolute top-0.5 left-1 text-[11px] sm:text-xs font-black select-none pointer-events-none ${
+                            isLightSquare ? 'text-[#779556]' : 'text-[#ebecd0]'
                           }`}
                         >
                           {rank}
                         </span>
                       )}
 
-                      {/* File Label on bottom row */}
+                      {/* File Label on bottom rank squares (Bottom-Right corner) */}
                       {rIdx === 7 && (
                         <span
-                          className={`absolute bottom-0.5 right-1 text-[10px] font-black select-none pointer-events-none opacity-80 ${
-                            isLightSquare ? theme.coordLight : theme.coordDark
+                          className={`absolute bottom-0.5 right-1 text-[11px] sm:text-xs font-black select-none pointer-events-none ${
+                            isLightSquare ? 'text-[#779556]' : 'text-[#ebecd0]'
                           }`}
                         >
                           {file}
                         </span>
                       )}
 
-                      {/* Piece Icon */}
+                      {/* Piece Icon matching user image */}
                       {piece && (
                         <div
-                          className={`w-[86%] h-[86%] z-10 transition-all duration-150 ${
-                            isSelected
-                              ? 'scale-110 -translate-y-1 drop-shadow-2xl'
-                              : 'active:scale-95 drop-shadow-md'
+                          className={`w-[90%] h-[90%] z-10 transition-transform duration-100 ${
+                            isSelected ? 'scale-105 -translate-y-0.5' : 'active:scale-95'
                           }`}
                         >
                           <ChessPieceSvg type={piece.type} color={piece.color} />
@@ -623,14 +558,14 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                         </div>
                       )}
 
-                      {/* Move Hint: Empty square target */}
+                      {/* Move Hint: Empty square target (Translucent grey disc) */}
                       {isLegalTarget && !piece && (
-                        <div className="absolute w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-slate-900/30 hover:scale-125 transition-transform z-20 pointer-events-none border border-black/20" />
+                        <div className="absolute w-[32%] h-[32%] rounded-full bg-black/18 z-20 pointer-events-none hover:scale-110 transition-transform" />
                       )}
 
-                      {/* Move Hint: Capture target */}
+                      {/* Move Hint: Capture target (Ring indicator) */}
                       {isLegalTarget && piece && (
-                        <div className="absolute inset-1 border-4 border-rose-500/80 rounded-full z-20 pointer-events-none animate-pulse" />
+                        <div className="absolute inset-0 border-[5px] border-black/20 rounded-full z-20 pointer-events-none animate-pulse" />
                       )}
                     </div>
                   );
@@ -640,12 +575,12 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
             {/* Promotion Selection Modal */}
             {pendingPromotion && (
-              <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-30 rounded-2xl flex flex-col items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/75 backdrop-blur-xs z-30 flex flex-col items-center justify-center p-4">
                 <h4 className="text-sm font-bold text-amber-300 mb-3 flex items-center gap-1.5">
                   <Crown className="w-4 h-4 text-amber-400" />
                   <span>Chọn Quân Phong Cấp (Promotion)</span>
                 </h4>
-                <div className="grid grid-cols-4 gap-3 bg-slate-900 p-3 rounded-2xl border border-slate-700">
+                <div className="grid grid-cols-4 gap-3 bg-[#262421] p-3 rounded-2xl border border-stone-600">
                   {[
                     { type: 'q', label: 'Hậu' },
                     { type: 'r', label: 'Xe' },
@@ -655,7 +590,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                     <button
                       key={p.type}
                       onClick={() => handleConfirmPromotion(p.type as any)}
-                      className="flex flex-col items-center p-3 bg-slate-800 hover:bg-amber-600/30 border border-slate-600 rounded-xl transition cursor-pointer group"
+                      className="flex flex-col items-center p-3 bg-[#312e2b] hover:bg-[#3f3b37] border border-stone-600 rounded-xl transition cursor-pointer group"
                     >
                       <div className="w-12 h-12 mb-1 group-hover:scale-110 transition">
                         <ChessPieceSvg
@@ -663,7 +598,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                           color={mySide === 'WHITE' ? 'w' : 'b'}
                         />
                       </div>
-                      <span className="text-xs font-bold text-slate-200 group-hover:text-amber-300">
+                      <span className="text-xs font-bold text-stone-200 group-hover:text-amber-300">
                         {p.label}
                       </span>
                     </button>
@@ -671,7 +606,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                 </div>
                 <button
                   onClick={() => setPendingPromotion(null)}
-                  className="mt-4 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-slate-400 rounded-lg cursor-pointer"
+                  className="mt-4 px-4 py-1.5 bg-[#312e2b] hover:bg-[#3f3b37] text-xs text-stone-400 rounded-lg cursor-pointer"
                 >
                   Hủy nước đi
                 </button>
@@ -679,8 +614,8 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             )}
           </div>
 
-          {/* Bottom Player Bar (Me or White if normal) */}
-          <div className="w-full max-w-[560px] mt-2">
+          {/* Bottom Player Bar */}
+          <div className="w-full mt-1.5">
             {renderPlayerBar(
               isFlipped ? blackPlayer : whitePlayer,
               isFlipped ? 'BLACK' : 'WHITE',
@@ -691,10 +626,10 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
           {/* Duel Control Buttons for Active Players */}
           {!isSpectator && !chessState?.winnerSide && (
-            <div className="w-full max-w-[560px] flex items-center justify-between gap-3 mt-3">
+            <div className="w-full flex items-center justify-between gap-3 mt-2.5">
               <button
                 onClick={() => setShowDrawConfirm(true)}
-                className="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                className="flex-1 py-2 px-3 bg-[#262421] hover:bg-[#312e2b] border border-[#3d3a36] text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
               >
                 <Handshake className="w-4 h-4" />
                 <span>Xin Hòa</span>
@@ -712,23 +647,23 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
           {/* Action Error Message */}
           {actionError && (
-            <div className="w-full max-w-[560px] mt-2 p-2 bg-rose-950/80 border border-rose-800 text-rose-200 text-xs rounded-xl flex items-center gap-2">
+            <div className="w-full mt-2 p-2 bg-rose-950/80 border border-rose-800 text-rose-200 text-xs rounded-xl flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
               <span>{actionError}</span>
             </div>
           )}
         </div>
 
-        {/* Right Sidebar: Move History, Chat & Spectators */}
-        <div className="w-full lg:w-96 flex flex-col bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden shadow-lg h-[520px] lg:h-auto min-h-[480px]">
+        {/* Right Sidebar: Fixed Width & Controlled Height with Full Scrollability */}
+        <div className="w-full lg:w-[380px] lg:min-w-[380px] lg:max-w-[380px] shrink-0 flex flex-col bg-[#21201d] border border-[#312e2b] rounded-2xl overflow-hidden shadow-2xl h-[560px] sm:h-[600px] lg:h-[640px] max-h-[calc(100vh-120px)]">
           {/* Sidebar Tabs */}
-          <div className="flex border-b border-slate-800 bg-slate-950/80 px-2 pt-2">
+          <div className="flex border-b border-[#312e2b] bg-[#1a1917] px-2 pt-2 shrink-0">
             <button
               onClick={() => setActiveTab('CHAT')}
-              className={`flex-1 py-2 text-xs font-bold border-b-2 transition flex items-center justify-center gap-1.5 cursor-pointer relative ${
+              className={`flex-1 py-2.5 text-xs font-bold border-b-2 transition flex items-center justify-center gap-1.5 cursor-pointer relative ${
                 activeTab === 'CHAT'
-                  ? 'border-indigo-400 text-indigo-300'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-emerald-400 text-emerald-300 bg-[#262421]/60'
+                  : 'border-transparent text-stone-400 hover:text-stone-200'
               }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
@@ -742,10 +677,10 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
             <button
               onClick={() => setActiveTab('HISTORY')}
-              className={`flex-1 py-2 text-xs font-bold border-b-2 transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-2.5 text-xs font-bold border-b-2 transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeTab === 'HISTORY'
-                  ? 'border-amber-400 text-amber-300'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-amber-400 text-amber-300 bg-[#262421]/60'
+                  : 'border-transparent text-stone-400 hover:text-stone-200'
               }`}
             >
               <History className="w-3.5 h-3.5" />
@@ -754,10 +689,10 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
             <button
               onClick={() => setActiveTab('SPECTATORS')}
-              className={`flex-1 py-2 text-xs font-bold border-b-2 transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 py-2.5 text-xs font-bold border-b-2 transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 activeTab === 'SPECTATORS'
-                  ? 'border-emerald-400 text-emerald-300'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
+                  ? 'border-indigo-400 text-indigo-300 bg-[#262421]/60'
+                  : 'border-transparent text-stone-400 hover:text-stone-200'
               }`}
             >
               <Users className="w-3.5 h-3.5" />
@@ -765,45 +700,45 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             </button>
           </div>
 
-          {/* Tab Content Area */}
-          <div className="flex-1 overflow-hidden flex flex-col">
+          {/* Tab Content Area: flex-1 min-h-0 guarantees scrollability! */}
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {activeTab === 'CHAT' && (
-              <div className="flex-1 h-full min-h-0">
-                {/* KhungChat with isSpectator flag: only spectators receive Grandmaster commentary */}
+              <div className="flex-1 min-h-0 h-full flex flex-col overflow-hidden">
                 <KhungChat
                   roomCode={roomState.code}
                   myPlayerId={myPlayerId}
                   messages={chatMessages}
                   isSpectator={isSpectator}
+                  hideHeader={true}
                 />
               </div>
             )}
 
             {activeTab === 'HISTORY' && (
-              <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1 scrollbar-thin scrollbar-thumb-stone-700">
                 {movePairs.length === 0 ? (
-                  <div className="text-center py-12 text-xs text-slate-500">
+                  <div className="text-center py-12 text-xs text-stone-500">
                     Chưa có nước đi nào. Ván cờ bắt đầu khi quân Trắng xuất phát!
                   </div>
                 ) : (
-                  <div className="border border-slate-800 rounded-xl overflow-hidden text-xs">
-                    <div className="grid grid-cols-5 bg-slate-950 p-2 font-bold text-slate-400 border-b border-slate-800">
+                  <div className="border border-stone-700 rounded-xl overflow-hidden text-xs">
+                    <div className="grid grid-cols-5 bg-[#1a1917] p-2 font-bold text-stone-400 border-b border-stone-700">
                       <span className="col-span-1 text-center">#</span>
-                      <span className="col-span-2 text-slate-200">Trắng (White)</span>
-                      <span className="col-span-2 text-slate-200">Đen (Black)</span>
+                      <span className="col-span-2 text-stone-200">Trắng (White)</span>
+                      <span className="col-span-2 text-stone-200">Đen (Black)</span>
                     </div>
                     {movePairs.map((pair) => (
                       <div
                         key={pair.index}
-                        className={`grid grid-cols-5 p-2 border-b border-slate-800/60 font-mono transition ${
-                          pair.index % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/80'
+                        className={`grid grid-cols-5 p-2 border-b border-stone-800 font-mono transition ${
+                          pair.index % 2 === 0 ? 'bg-[#262421]' : 'bg-[#1e1d1b]'
                         }`}
                       >
-                        <span className="col-span-1 text-center text-slate-500 font-bold">
+                        <span className="col-span-1 text-center text-stone-500 font-bold">
                           {pair.index}.
                         </span>
                         <span className="col-span-2 text-white font-semibold">{pair.white || '...'}</span>
-                        <span className="col-span-2 text-slate-300 font-semibold">{pair.black || ''}</span>
+                        <span className="col-span-2 text-stone-300 font-semibold">{pair.black || ''}</span>
                       </div>
                     ))}
                     <div ref={moveHistoryEndRef} />
@@ -813,12 +748,12 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             )}
 
             {activeTab === 'SPECTATORS' && (
-              <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                <div className="text-xs text-slate-400 mb-2">
+              <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-stone-700">
+                <div className="text-xs text-stone-400 mb-2">
                   Phòng hỗ trợ tối đa <strong>4 khán giả</strong> theo dõi ván cờ trực tiếp:
                 </div>
                 {spectators.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800 p-4">
+                  <div className="text-center py-8 text-xs text-stone-500 bg-[#1a1917] rounded-xl border border-stone-800 p-4">
                     Hiện chưa có khán giả nào. Bạn bè có thể nhập mã{' '}
                     <strong className="text-amber-400 font-mono">{roomState.code}</strong> để vào xem trực tiếp!
                   </div>
@@ -826,7 +761,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                   spectators.map((s, idx) => (
                     <div
                       key={s.id}
-                      className="flex items-center justify-between p-2.5 bg-slate-950/60 border border-slate-800 rounded-xl"
+                      className="flex items-center justify-between p-2.5 bg-[#262421] border border-stone-700 rounded-xl"
                     >
                       <div className="flex items-center gap-2.5">
                         <span className="text-lg">{s.avatar}</span>
@@ -839,7 +774,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                               </span>
                             )}
                           </div>
-                          <span className="text-[10px] text-slate-400">Khán giả #{idx + 1}</span>
+                          <span className="text-[10px] text-stone-400">Khán giả #{idx + 1}</span>
                         </div>
                       </div>
                       <span className="text-xs font-mono font-bold text-amber-400">{s.score} xu</span>
@@ -854,19 +789,19 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
       {/* Opponent Draw Offer Alert Modal */}
       {isIncomingDrawOffer && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-amber-600 rounded-2xl max-w-sm w-full p-5 shadow-2xl text-center">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#262421] border border-amber-600 rounded-2xl max-w-sm w-full p-5 shadow-2xl text-center">
             <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
               <Handshake className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-white">Lời Mời Cầu Hòa!</h3>
-            <p className="text-xs text-slate-300 mt-2">
+            <p className="text-xs text-stone-300 mt-2">
               Đối thủ vừa gửi đề nghị <strong>CẦU HÒA</strong>. Bạn có đồng ý kết thúc trận đấu với tỷ số hòa không?
             </p>
             <div className="grid grid-cols-2 gap-3 mt-4">
               <button
                 onClick={() => handleRespondDraw(false)}
-                className="py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+                className="py-2.5 bg-[#36332f] hover:bg-[#45423d] text-stone-300 font-bold text-xs rounded-xl cursor-pointer"
               >
                 Từ chối
               </button>
@@ -883,19 +818,19 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
       {/* Resign Confirm Modal */}
       {showResignConfirm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-rose-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl text-center">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#262421] border border-rose-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl text-center">
             <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-3">
               <Flag className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-white">Xác Nhận Đầu Hàng?</h3>
-            <p className="text-xs text-slate-300 mt-2">
+            <p className="text-xs text-stone-300 mt-2">
               Bạn có chắc chắn muốn xin đầu hàng ván cờ này không? Đối thủ sẽ được xử thắng và nhận +100 xu.
             </p>
             <div className="grid grid-cols-2 gap-3 mt-4">
               <button
                 onClick={() => setShowResignConfirm(false)}
-                className="py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+                className="py-2 bg-[#36332f] hover:bg-[#45423d] text-stone-300 font-bold text-xs rounded-xl cursor-pointer"
               >
                 Hủy bỏ
               </button>
@@ -912,19 +847,19 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
       {/* Draw Offer Confirm Modal */}
       {showDrawConfirm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-amber-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl text-center">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#262421] border border-amber-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl text-center">
             <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3">
               <Handshake className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-white">Gửi Lời Cầu Hòa?</h3>
-            <p className="text-xs text-slate-300 mt-2">
+            <p className="text-xs text-stone-300 mt-2">
               Bạn muốn gửi lời xin hòa tới đối thủ? Trận đấu sẽ kết thúc hòa nếu đối phương đồng ý.
             </p>
             <div className="grid grid-cols-2 gap-3 mt-4">
               <button
                 onClick={() => setShowDrawConfirm(false)}
-                className="py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+                className="py-2 bg-[#36332f] hover:bg-[#45423d] text-stone-300 font-bold text-xs rounded-xl cursor-pointer"
               >
                 Hủy bỏ
               </button>
@@ -941,9 +876,8 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
       {/* Game Over Modal */}
       {chessState?.winnerSide && !isGameOverModalDismissed && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border-2 border-amber-500/80 rounded-3xl max-w-md w-full p-6 shadow-2xl text-center relative overflow-hidden">
-            {/* Header icon */}
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-[#262421] border-2 border-amber-500/80 rounded-3xl max-w-md w-full p-6 shadow-2xl text-center relative overflow-hidden">
             <div className="w-16 h-16 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-3 border border-amber-500/40">
               <Trophy className="w-8 h-8" />
             </div>
@@ -966,17 +900,17 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             </p>
 
             {/* Players summary */}
-            <div className="grid grid-cols-2 gap-3 my-5 bg-slate-950 p-4 rounded-2xl border border-slate-800">
+            <div className="grid grid-cols-2 gap-3 my-5 bg-[#1a1917] p-4 rounded-2xl border border-stone-800">
               <div
                 className={`p-2.5 rounded-xl border ${
                   chessState.winnerSide === 'WHITE'
                     ? 'border-amber-500 bg-amber-950/30'
-                    : 'border-slate-800'
+                    : 'border-stone-800'
                 }`}
               >
                 <div className="text-xl mb-1">{whitePlayer?.avatar || '⚪'}</div>
                 <div className="text-xs font-bold text-white truncate">{whitePlayer?.name || 'Trắng'}</div>
-                <div className="text-[10px] text-slate-400">Quân Trắng</div>
+                <div className="text-[10px] text-stone-400">Quân Trắng</div>
                 {chessState.winnerSide === 'WHITE' && (
                   <span className="inline-block mt-1 text-[10px] text-amber-400 font-bold bg-amber-500/20 px-2 py-0.5 rounded-full">
                     +100 xu
@@ -988,12 +922,12 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                 className={`p-2.5 rounded-xl border ${
                   chessState.winnerSide === 'BLACK'
                     ? 'border-amber-500 bg-amber-950/30'
-                    : 'border-slate-800'
+                    : 'border-stone-800'
                 }`}
               >
                 <div className="text-xl mb-1">{blackPlayer?.avatar || '⚫'}</div>
                 <div className="text-xs font-bold text-white truncate">{blackPlayer?.name || 'Đen'}</div>
-                <div className="text-[10px] text-slate-400">Quân Đen</div>
+                <div className="text-[10px] text-stone-400">Quân Đen</div>
                 {chessState.winnerSide === 'BLACK' && (
                   <span className="inline-block mt-1 text-[10px] text-amber-400 font-bold bg-amber-500/20 px-2 py-0.5 rounded-full">
                     +100 xu
@@ -1005,7 +939,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setIsGameOverModalDismissed(true)}
-                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+                className="flex-1 py-3 bg-[#36332f] hover:bg-[#45423d] text-stone-300 font-bold text-xs rounded-xl cursor-pointer"
               >
                 Xem lại bàn cờ
               </button>
@@ -1047,20 +981,20 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
     return (
       <div
-        className={`flex items-center justify-between p-2.5 rounded-xl border transition duration-200 ${
+        className={`flex items-center justify-between p-2 rounded-xl border transition duration-150 ${
           isCurrentTurn
-            ? 'bg-slate-900 border-amber-500/80 ring-2 ring-amber-500/20 shadow-lg'
-            : 'bg-slate-900/60 border-slate-800'
+            ? 'bg-[#262421] border-emerald-500/80 ring-1 ring-emerald-500/30 shadow-md'
+            : 'bg-[#1f1e1b] border-[#312e2b]'
         }`}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <div className="relative shrink-0">
-            <span className="text-2xl drop-shadow">{player?.avatar || '👤'}</span>
+            <span className="text-xl drop-shadow">{player?.avatar || '👤'}</span>
             <span
-              className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border flex items-center justify-center text-[10px] font-black ${
+              className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[9px] font-black ${
                 isWhite
                   ? 'bg-white text-slate-900 border-black'
-                  : 'bg-slate-900 text-white border-white'
+                  : 'bg-stone-900 text-white border-white'
               }`}
             >
               {isWhite ? 'W' : 'B'}
@@ -1073,21 +1007,21 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
                 {player?.name || (isWhite ? 'Chưa có quân Trắng' : 'Chưa có quân Đen')}
               </span>
               {player?.id === myPlayerId && (
-                <span className="text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1 rounded shrink-0">
+                <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1 rounded shrink-0 font-bold">
                   Bạn
                 </span>
               )}
             </div>
 
             {/* Sub-info: Score & Captured pieces tray */}
-            <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 flex-wrap">
+            <div className="flex items-center gap-1.5 text-[10px] text-stone-400 mt-0.5 flex-wrap">
               <span className="text-amber-400 font-mono font-bold">{player?.score ?? 1000} xu</span>
               <span>•</span>
 
               {/* Captured piece icons */}
               <div className="flex items-center gap-1">
                 {capturedPieces.map((cap) => (
-                  <div key={cap.type} className="flex items-center text-[10px] text-slate-300">
+                  <div key={cap.type} className="flex items-center text-[10px] text-stone-300">
                     <div className="w-3.5 h-3.5 inline-block">
                       <ChessPieceSvg
                         type={cap.type}
@@ -1101,7 +1035,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
 
                 {/* Material score difference badge */}
                 {materialAdvantage > 0 && (
-                  <span className="ml-1 px-1.5 py-0.2 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded text-[9px] font-mono font-bold">
+                  <span className="ml-1 px-1 py-0.2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded text-[9px] font-mono font-bold">
                     +{materialAdvantage}
                   </span>
                 )}
@@ -1116,12 +1050,13 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
             isLowTime && isCurrentTurn
               ? 'bg-rose-950/80 text-rose-300 border-rose-700 animate-pulse ring-2 ring-rose-500/30'
               : isCurrentTurn
-              ? 'bg-amber-950/80 text-amber-300 border-amber-600 ring-1 ring-amber-500/30'
-              : 'bg-slate-950 text-slate-400 border-slate-800'
+              ? 'bg-[#2e2b27] text-white border-emerald-600'
+              : 'bg-[#181715] text-stone-400 border-stone-800'
           }`}
         >
-          <Clock className={`w-3.5 h-3.5 ${isCurrentTurn ? 'text-amber-400' : 'text-slate-500'}`} />
+          <Clock className={`w-3.5 h-3.5 ${isCurrentTurn ? 'text-emerald-400' : 'text-stone-500'}`} />
           <span>{formatTimer(timeRemaining)}</span>
+          <span className="text-[10px] text-emerald-400 font-bold opacity-85">(+10s)</span>
         </div>
       </div>
     );
