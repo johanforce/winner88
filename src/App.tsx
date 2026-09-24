@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getOrCreatePlayerProfile,
+  savePlayerProfile,
   saveLastRoomCode,
   getLastRoomCode,
   clearLastRoomCode,
@@ -147,6 +148,7 @@ export default function App() {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('ROOM_STATE', onRoomState);
+    socket.on('ROOM_STATE_SYNC', onRoomState);
     socket.on('PLAYER_CARDS', onPlayerCards);
     socket.on('CHAT_HISTORY', onChatHistory);
 
@@ -164,6 +166,7 @@ export default function App() {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('ROOM_STATE', onRoomState);
+      socket.off('ROOM_STATE_SYNC', onRoomState);
       socket.off('PLAYER_CARDS', onPlayerCards);
       socket.off('CHAT_HISTORY', onChatHistory);
     };
@@ -173,6 +176,7 @@ export default function App() {
   const handleProfileComplete = (name: string, avatar: string) => {
     const updated = { ...profile, name, avatar };
     setProfile(updated);
+    savePlayerProfile(updated);
     setCurrentScreen('LOBBY');
   };
 
@@ -203,12 +207,15 @@ export default function App() {
         initialScore: profile.score,
         xiangqiTimeMode,
       },
-      (res: { success: boolean; roomCode?: string; message?: string }) => {
+      (res: { success: boolean; roomCode?: string; message?: string; roomState?: RoomPublicState }) => {
         responded = true;
         clearTimeout(timeout);
         if (!res?.success) {
           setGlobalError(res?.message || 'Không thể tạo phòng');
         } else if (res.roomCode) {
+          if (res.roomState) {
+            setRoomState(res.roomState);
+          }
           saveLastRoomCode(res.roomCode);
           setCurrentScreen('ROOM');
         }
@@ -242,12 +249,15 @@ export default function App() {
         reconnectToken: profile.reconnectToken,
         initialScore: profile.score,
       },
-      (res: { success: boolean; roomCode?: string; message?: string }) => {
+      (res: { success: boolean; roomCode?: string; message?: string; roomState?: RoomPublicState }) => {
         responded = true;
         clearTimeout(timeout);
         if (!res?.success) {
           setGlobalError(res?.message || 'Không thể vào phòng');
         } else if (res.roomCode) {
+          if (res.roomState) {
+            setRoomState(res.roomState);
+          }
           saveLastRoomCode(res.roomCode);
           setCurrentScreen('ROOM');
         }

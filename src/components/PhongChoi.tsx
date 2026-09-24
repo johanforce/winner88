@@ -64,9 +64,22 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
   // Slots representation: 0..3 for Card games, 0..5 for Chess (2 players + 4 spectators), 0..7 for other Board games
   const totalSlots = isCoVua ? 6 : isBoardGame ? 8 : 4;
   const seats: (PlayerPublicInfo | null)[] = Array(totalSlots).fill(null);
+  
+  // 1. Gán người chơi vào đúng vị trí ghế hợp lệ nếu ghế còn trống
   roomState.players.forEach((p) => {
-    if (typeof p.seatIndex === 'number' && p.seatIndex >= 0 && p.seatIndex < totalSlots) {
+    if (typeof p.seatIndex === 'number' && p.seatIndex >= 0 && p.seatIndex < totalSlots && !seats[p.seatIndex]) {
       seats[p.seatIndex] = p;
+    }
+  });
+
+  // 2. Dự phòng: Nếu có người chơi nào chưa được xếp vào ghế (do trùng seatIndex hoặc ngoài dải),
+  // xếp ngay vào ghế trống đầu tiên để TUYỆT ĐỐI KHÔNG BỊ ẨN NGƯỜI CHƠI
+  roomState.players.forEach((p) => {
+    if (!seats.includes(p)) {
+      const freeIdx = seats.findIndex((s) => s === null);
+      if (freeIdx !== -1) {
+        seats[freeIdx] = p;
+      }
     }
   });
 

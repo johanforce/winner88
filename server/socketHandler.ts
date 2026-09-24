@@ -74,7 +74,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           roomManager.registerPlayerRoom(data.playerId, room.code);
           socket.join(room.code);
 
-          callback?.({ success: true, roomCode: room.code });
+          const roomState = room.getPublicState(data.playerId);
+          callback?.({ success: true, roomCode: room.code, roomState });
           broadcastRoomUpdate(room.code);
         } catch (err: any) {
           console.error('Error in ROOM_CREATE:', err);
@@ -140,13 +141,24 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           roomManager.registerPlayerRoom(data.playerId, code);
           socket.join(code);
 
-          callback?.({ success: true, roomCode: code });
+          const roomState = room.getPublicState(data.playerId);
+          callback?.({ success: true, roomCode: code, roomState });
           broadcastRoomUpdate(code);
         } catch (err: any) {
           callback?.({ success: false, message: err.message || 'Lỗi khi vào phòng' });
         }
       }
     );
+
+    // 2.5 Lấy trạng thái phòng tức thời
+    socket.on('ROOM_GET_STATE', (data: { roomCode: string; playerId: string }, callback) => {
+      const room = roomManager.getRoom(data?.roomCode);
+      if (!room) {
+        callback?.({ success: false, message: 'Phòng không tồn tại' });
+        return;
+      }
+      callback?.({ success: true, roomState: room.getPublicState(data.playerId) });
+    });
 
     // 3. Rời phòng
     socket.on(

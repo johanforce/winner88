@@ -154,7 +154,7 @@ export class GameRoom {
       existingPlayer.socketId = socketId;
       existingPlayer.name = name;
       existingPlayer.avatar = avatar;
-      existingPlayer.status = 'PLAYING';
+      existingPlayer.status = this.status === 'PLAYING' ? 'PLAYING' : 'WAITING';
       existingPlayer.disconnectedAt = null;
 
       const timer = this.disconnectTimers.get(id);

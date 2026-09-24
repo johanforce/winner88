@@ -365,3 +365,25 @@ export interface RoomListItem {
   maxPlayers: number;
   status: 'WAITING' | 'PLAYING';
 }
+
+export interface PhomMeld {
+  id?: string;
+  playerId: string;
+  cards: Card[];
+  type?: 'SAME_RANK' | 'CONSECUTIVE_SUIT';
+}
+
+export interface VoiceParticipant {
+  socketId: string;
+  playerId: string;
+  playerName: string;
+  playerAvatar: string;
+  isMuted: boolean;
+  hasMic: boolean;
+}
+
+export type VoiceSignalData =
+  | { type: 'offer'; sdp: RTCSessionDescriptionInit }
+  | { type: 'answer'; sdp: RTCSessionDescriptionInit }
+  | { type: 'candidate'; candidate: RTCIceCandidateInit };
+
