@@ -5,11 +5,17 @@ import { socket } from '../socket';
 
 interface KhungChatProps {
   roomCode: string;
-  playerId: string;
-  messages: ChatMessage[];
+  playerId?: string;
+  myPlayerId?: string;
+  messages?: ChatMessage[];
+  chatMessages?: ChatMessage[];
   isOpen?: boolean;
   onClose?: () => void;
   isFloating?: boolean;
+  hideHeader?: boolean;
+  isSpectator?: boolean;
+  onReadAll?: () => void;
+  onInterceptMessage?: (text: string) => boolean;
 }
 
 const QUICK_CHATS = [
@@ -24,11 +30,24 @@ const QUICK_CHATS = [
 export const KhungChat: React.FC<KhungChatProps> = ({
   roomCode,
   playerId,
-  messages,
+  myPlayerId,
+  messages: propsMessages,
+  chatMessages: propsChatMessages,
   isOpen = true,
   onClose,
   isFloating = false,
+  hideHeader = false,
+  isSpectator,
+  onReadAll,
+  onInterceptMessage,
 }) => {
+  const effectivePlayerId = playerId || myPlayerId || '';
+  const messages = Array.isArray(propsMessages)
+    ? propsMessages
+    : Array.isArray(propsChatMessages)
+    ? propsChatMessages
+    : [];
+
   const [inputText, setInputText] = useState('');
   const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -71,9 +90,16 @@ export const KhungChat: React.FC<KhungChatProps> = ({
     const text = (textToSend || inputText).trim();
     if (!text) return;
 
+    if (onInterceptMessage && onInterceptMessage(text)) {
+      if (!textToSend) {
+        setInputText('');
+      }
+      return;
+    }
+
     socket.emit('CHAT_MESSAGE', {
       roomCode,
-      playerId,
+      playerId: effectivePlayerId,
       text,
     });
 
@@ -105,21 +131,23 @@ export const KhungChat: React.FC<KhungChatProps> = ({
 
       <div className={containerClasses}>
         {/* Header */}
-        <div className="px-4 py-3 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-emerald-400" />
-            <span className="font-bold text-sm text-white">Trò chuyện trong phòng</span>
+        {!hideHeader && (
+          <div className="px-4 py-3 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <span className="font-bold text-sm text-white">Trò chuyện trong phòng</span>
+            </div>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-2 sm:p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition touch-manipulation cursor-pointer"
+                title="Đóng chat"
+              >
+                <X className="w-5 h-5 sm:w-4 sm:h-4" />
+              </button>
+            )}
           </div>
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="p-2 sm:p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition touch-manipulation cursor-pointer"
-              title="Đóng chat"
-            >
-              <X className="w-5 h-5 sm:w-4 sm:h-4" />
-            </button>
-          )}
-        </div>
+        )}
 
       {/* Message List */}
       <div
@@ -144,7 +172,7 @@ export const KhungChat: React.FC<KhungChatProps> = ({
               );
             }
 
-            const isMe = msg.senderId === playerId;
+            const isMe = msg.senderId === effectivePlayerId;
 
             return (
               <div

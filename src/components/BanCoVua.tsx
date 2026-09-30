@@ -237,7 +237,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
   }, [selectedSquare, chess, isMyTurn, isSpectator, chessState?.winnerSide]);
 
   const legalTargetSquares = useMemo(() => {
-    return new Set(legalMovesForSelected.map((m) => m.to));
+    return new Set<string>(legalMovesForSelected.map((m) => m.to));
   }, [legalMovesForSelected]);
 
   // Find king square that is in check
@@ -896,7 +896,7 @@ export const BanCoVua: React.FC<BanCoVuaProps> = ({
               {chessState.winReason === 'STALEMATE' && 'Hết nước đi hợp lệ (Stalemate / Pat)'}
               {chessState.winReason === 'THREEFOLD' && 'Thế cờ lặp lại 3 lần'}
               {chessState.winReason === 'INSUFFICIENT_MATERIAL' && 'Không đủ lực lượng chiếu bí'}
-              {chessState.winReason === '50_MOVES' && 'Luật 50 nước không ăn quân/đi tốt'}
+              {chessState.winReason === 'FIFTY_MOVES' && 'Luật 50 nước không ăn quân/đi tốt'}
             </p>
 
             {/* Players summary */}

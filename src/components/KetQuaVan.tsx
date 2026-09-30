@@ -10,6 +10,7 @@ interface KetQuaVanProps {
   isHost: boolean;
   rule: GameRule;
   onPlayAgain: () => void;
+  onReturnToWaiting?: () => void;
   onLeaveRoom: () => void;
   onOpenRules?: () => void;
 }
@@ -20,6 +21,7 @@ export const KetQuaVan: React.FC<KetQuaVanProps> = ({
   isHost,
   rule,
   onPlayAgain,
+  onReturnToWaiting,
   onLeaveRoom,
   onOpenRules,
 }) => {

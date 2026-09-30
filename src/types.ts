@@ -352,6 +352,7 @@ export interface RoomPublicState {
   banTauState?: BanTauState;
   coCaNguaState?: CoCaNguaState;
   chessState?: ChessState;
+  phomState?: any;
   results?: GameResultRecord[];
   chatMessages?: ChatMessage[];
 }
@@ -380,6 +381,7 @@ export interface VoiceParticipant {
   playerAvatar: string;
   isMuted: boolean;
   hasMic: boolean;
+  isSpeaking?: boolean;
 }
 
 export type VoiceSignalData =

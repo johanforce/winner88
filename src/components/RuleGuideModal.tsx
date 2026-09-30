@@ -17,14 +17,18 @@ interface RuleGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultRule?: GameRule;
+  initialRule?: GameRule | string;
 }
 
 export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
   isOpen,
   onClose,
   defaultRule = 'TIEN_LEN_MIEN_NAM',
+  initialRule,
 }) => {
-  const [activeTab, setActiveTab] = useState<ModalTab>(defaultRule);
+  const [activeTab, setActiveTab] = useState<ModalTab>(
+    (initialRule as ModalTab) || defaultRule
+  );
 
   if (!isOpen) return null;
 
@@ -77,6 +81,46 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
             }`}
           >
             <span>🏆 Cờ Tướng</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('CO_VUA')}
+            className={`pb-2.5 px-2.5 sm:px-3 font-semibold text-xs sm:text-sm transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer touch-manipulation ${
+              activeTab === 'CO_VUA'
+                ? 'border-purple-500 text-purple-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>♟️ Cờ Vua</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('CARO')}
+            className={`pb-2.5 px-2.5 sm:px-3 font-semibold text-xs sm:text-sm transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer touch-manipulation ${
+              activeTab === 'CARO'
+                ? 'border-sky-500 text-sky-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>⭕ Cờ Caro</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('BAN_TAU')}
+            className={`pb-2.5 px-2.5 sm:px-3 font-semibold text-xs sm:text-sm transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer touch-manipulation ${
+              activeTab === 'BAN_TAU'
+                ? 'border-cyan-500 text-cyan-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>🚢 Bắn Tàu</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('CO_CA_NGUA')}
+            className={`pb-2.5 px-2.5 sm:px-3 font-semibold text-xs sm:text-sm transition-all border-b-2 whitespace-nowrap flex items-center gap-1.5 cursor-pointer touch-manipulation ${
+              activeTab === 'CO_CA_NGUA'
+                ? 'border-orange-500 text-orange-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>🎲 Cá Ngựa</span>
           </button>
           <button
             onClick={() => setActiveTab('PENALTY_RATES')}
@@ -301,6 +345,72 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                   &bull; <strong>Hết giờ (Timeout):</strong> Kim đồng hồ về 0 &rarr; Xử thua ngay lập tức (-100 xu).<br />
                   &bull; <strong>Đầu hàng:</strong> Có thể xin đầu hàng bất kỳ lúc nào nếu cảm thấy thế cờ không thể cứu vãn.<br />
                   &bull; <strong>Xin hòa cờ:</strong> Kỳ thủ có thể bấm &quot;Xin hòa&quot;. Nếu đối phương đồng ý, trận đấu kết thúc với kết quả hòa (không trừ xu).
+                </p>
+              </div>
+            </>
+          ) : activeTab === 'CO_VUA' ? (
+            /* TAB CO_VUA: CỜ VUA */
+            <>
+              <div className="bg-purple-950/40 border border-purple-800/40 p-3.5 rounded-xl">
+                <h3 className="font-bold text-purple-300 mb-1 flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-purple-400" /> Luật Thi Đấu Cờ Vua Quốc Tế (FIDE)
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  &bull; <strong>2 Kỳ thủ:</strong> Trắng (ghế 1 - đi trước ⚪) và Đen (ghế 2 - đi sau ⚫), cùng các vị trí khán giả theo dõi thời gian thực.<br />
+                  &bull; <strong>Thời gian:</strong> 15 phút chính cho mỗi bên, cộng 10 giây tích lũy sau mỗi nước đi hợp lệ.<br />
+                  &bull; <strong>Quy tắc chuẩn:</strong> Nhập thành (Castle), Bắt tốt qua đường (En passant), Phong cấp khi tốt chạm hàng cuối (Tốt biến thành Hậu, Xe, Tượng, Mã).<br />
+                  &bull; <strong>AI Trợ Lý Phân Tích:</strong> Hệ thống tự động bình luận và đánh giá các nước đi hay / sai lầm cho khán giả và người chơi sau ván đấu.
+                </p>
+              </div>
+              <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl text-xs space-y-1.5">
+                <h4 className="font-bold text-amber-300">Cách Phân Định Thắng Thua</h4>
+                <p>&bull; <strong>Chiếu bí (Checkmate):</strong> Vua bị tấn công và không còn nước đi hợp lệ nào để thoát &rarr; Thắng trận (+100 xu).</p>
+                <p>&bull; <strong>Hết giờ (Timeout):</strong> Kim đồng hồ về 0 &rarr; Xử thua (-100 xu).</p>
+                <p>&bull; <strong>Hòa cờ (Stalemate / Draw):</strong> Vua không bị chiếu nhưng không còn nước đi hợp lệ, hoặc lặp lại 3 lần thế cờ, hoặc 2 bên thỏa thuận hòa.</p>
+              </div>
+            </>
+          ) : activeTab === 'CARO' ? (
+            /* TAB CARO: CỜ CARO */
+            <>
+              <div className="bg-sky-950/40 border border-sky-800/40 p-3.5 rounded-xl">
+                <h3 className="font-bold text-sky-300 mb-1 flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-sky-400" /> Luật Cờ Caro (Gomoku Chuẩn)
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  &bull; <strong>Bàn cờ:</strong> Kích thước 15x15 ô vuông tiêu chuẩn thi đấu.<br />
+                  &bull; <strong>Lượt đi:</strong> Kỳ thủ X (đỏ) đi trước, kỳ thủ O (xanh dương) đi sau.<br />
+                  &bull; <strong>Điều kiện thắng:</strong> Tạo thành chuỗi liên tiếp <strong>5 quân cờ cùng loại</strong> theo hàng ngang, hàng dọc hoặc đường chéo.<br />
+                  &bull; <strong>Luật Chặn 2 Đầu:</strong> Chuỗi 5 quân nếu bị đối phương chặn cả hai đầu mút thì <strong>chưa thắng</strong> (phải đạt 6 quân hoặc tạo thế 5 không chặn).
+                </p>
+              </div>
+            </>
+          ) : activeTab === 'BAN_TAU' ? (
+            /* TAB BAN_TAU: BẮN TÀU CHIẾN */
+            <>
+              <div className="bg-cyan-950/40 border border-cyan-800/40 p-3.5 rounded-xl">
+                <h3 className="font-bold text-cyan-300 mb-1 flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-cyan-400" /> Luật Bắn Tàu Chiến (Battleship)
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  &bull; <strong>Giai đoạn 1 - Bố trí hạm đội:</strong> Đặt 5 chiến hạm (Hàng không mẫu hạm 5 ô, Thiết giáp hạm 4 ô, Tàu tuần dương 3 ô, Tàu ngầm 3 ô, Tàu khu trục 2 ô) lên hải đồ 10x10. Các tàu không được chồng lấn nhau.<br />
+                  &bull; <strong>Giai đoạn 2 - Hải chiến:</strong> Hai bên lần lượt chọn ô trên hải đồ đối phương để nã pháo.<br />
+                  &bull; <strong>Trúng đích / Bắn trượt:</strong> Bắn trúng ô có tàu sẽ hiển thị hiệu ứng nổ và được bắn tiếp; bắn trượt (vào nước) sẽ đổi lượt.<br />
+                  &bull; <strong>Thắng cuộc:</strong> Bên nào bắn chìm toàn bộ hạm đội đối phương trước sẽ giành chiến thắng (+100 xu).
+                </p>
+              </div>
+            </>
+          ) : activeTab === 'CO_CA_NGUA' ? (
+            /* TAB CO_CA_NGUA: CỜ CÁ NGỰA */
+            <>
+              <div className="bg-orange-950/40 border border-orange-800/40 p-3.5 rounded-xl">
+                <h3 className="font-bold text-orange-300 mb-1 flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-orange-400" /> Luật Cờ Cá Ngựa (Ludo Dân Gian)
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  &bull; <strong>2 đến 4 Người chơi:</strong> 4 đội màu Đỏ, Xanh Dương, Vàng, Xanh Lá.<br />
+                  &bull; <strong>Xuất chuồng:</strong> Lắc xúc xắc ra điểm 6 (hoặc đôi 1) để đưa một chú ngựa từ chuồng ra ô xuất phát.<br />
+                  &bull; <strong>Đá ngựa:</strong> Đi đúng vào ô đang có ngựa của đối phương thì chú ngựa đó bị đá văng về chuồng xuất phát!<br />
+                  &bull; <strong>Về đích:</strong> Di chuyển trọn 1 vòng bàn cờ và leo lên các bậc chuồng từ 1 đến 6. Đội nào đưa đủ 4 ngựa về chuồng trước sẽ chiến thắng!
                 </p>
               </div>
             </>

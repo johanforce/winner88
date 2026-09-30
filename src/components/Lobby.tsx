@@ -140,10 +140,10 @@ export const Lobby: React.FC<LobbyProps> = ({
           </div>
           <div>
             <h1 className="font-black text-base sm:text-lg tracking-tight leading-tight">
-              Sảnh Đánh Bài Realtime
+              Sảnh Đánh Bài & Trò Chơi Trực Tuyến
             </h1>
             <p className="text-[11px] text-emerald-300/80 font-medium">
-              Tiến Lên Miền Nam &bull; Sâm Lốc
+              Tiến Lên &bull; Sâm Lốc &bull; Cờ Tướng &bull; Cờ Vua &bull; Cờ Caro &bull; Bắn Tàu &bull; Cá Ngựa
             </p>
           </div>
         </div>
@@ -308,6 +308,42 @@ export const Lobby: React.FC<LobbyProps> = ({
                 >
                   Cờ Tướng
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterRule('CO_VUA')}
+                  className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
+                    filterRule === 'CO_VUA' ? 'bg-purple-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Cờ Vua
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterRule('CARO')}
+                  className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
+                    filterRule === 'CARO' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Cờ Caro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterRule('BAN_TAU')}
+                  className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
+                    filterRule === 'BAN_TAU' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Bắn Tàu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterRule('CO_CA_NGUA')}
+                  className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
+                    filterRule === 'CO_CA_NGUA' ? 'bg-orange-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Cá Ngựa
+                </button>
               </div>
 
               <button
@@ -343,9 +379,39 @@ export const Lobby: React.FC<LobbyProps> = ({
               {filteredRooms.map((room) => {
                 const isFull = room.playerCount >= room.maxPlayers;
                 const isPlaying = room.status === 'PLAYING';
-                const isCoTuong = room.rule === 'CO_TUONG';
-                // For Cờ Tướng, spectators can join even if match is in progress as long as room is not full (max 4: 2 players + 2 spectators)
-                const canJoin = !isFull && (!isPlaying || isCoTuong);
+                const isBoardGame =
+                  room.rule === 'CO_TUONG' ||
+                  room.rule === 'CO_VUA' ||
+                  room.rule === 'CARO' ||
+                  room.rule === 'BAN_TAU';
+                // Spectators can join board games even if match is in progress as long as room is not full
+                const canJoin = !isFull && (!isPlaying || isBoardGame);
+
+                const getBadge = () => {
+                  switch (room.rule) {
+                    case 'TIEN_LEN_MIEN_NAM':
+                      return { text: '♠ Tiến Lên MN', cls: 'bg-emerald-950 text-emerald-300 border-emerald-800' };
+                    case 'SAM_LOC':
+                      return { text: '🔥 Sâm Lốc', cls: 'bg-amber-950 text-amber-300 border-amber-800' };
+                    case 'CO_TUONG':
+                      return {
+                        text: room.xiangqiTimeMode === 'BLITZ_5M' ? '⚡ Cờ Tướng (Chớp 5p)' : '🏆 Cờ Tướng (Tiêu chuẩn)',
+                        cls: 'bg-red-950 text-red-300 border-red-800',
+                      };
+                    case 'CO_VUA':
+                      return { text: '♟️ Cờ Vua', cls: 'bg-purple-950 text-purple-300 border-purple-800' };
+                    case 'CARO':
+                      return { text: '⭕ Cờ Caro', cls: 'bg-sky-950 text-sky-300 border-sky-800' };
+                    case 'BAN_TAU':
+                      return { text: '🚢 Bắn Tàu', cls: 'bg-cyan-950 text-cyan-300 border-cyan-800' };
+                    case 'CO_CA_NGUA':
+                      return { text: '🎲 Cờ Cá Ngựa', cls: 'bg-orange-950 text-orange-300 border-orange-800' };
+                    default:
+                      return { text: room.rule, cls: 'bg-slate-900 text-slate-300 border-slate-700' };
+                  }
+                };
+
+                const badge = getBadge();
 
                 return (
                   <div
@@ -358,21 +424,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                           {room.code}
                         </span>
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            room.rule === 'TIEN_LEN_MIEN_NAM'
-                              ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                              : room.rule === 'SAM_LOC'
-                              ? 'bg-amber-950 text-amber-300 border-amber-800'
-                              : 'bg-red-950 text-red-300 border-red-800'
-                          }`}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.cls}`}
                         >
-                          {room.rule === 'TIEN_LEN_MIEN_NAM'
-                            ? '♠ Tiến Lên'
-                            : room.rule === 'SAM_LOC'
-                            ? '🔥 Sâm Lốc'
-                            : room.xiangqiTimeMode === 'STANDARD'
-                            ? '🏆 Cờ Tướng (Tiêu chuẩn)'
-                            : '⚡ Cờ Tướng (Chớp 5p)'}
+                          {badge.text}
                         </span>
                       </div>
 
@@ -408,7 +462,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                         onClick={() => onJoinRoom(room.code)}
                         className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold transition touch-manipulation ${
                           canJoin
-                            ? isPlaying && isCoTuong
+                            ? isPlaying && isBoardGame
                               ? 'bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer active:scale-95'
                               : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95'
                             : 'bg-slate-800 text-slate-500 cursor-not-allowed'
@@ -417,7 +471,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                         {isFull
                           ? 'Đã đầy'
                           : isPlaying
-                          ? isCoTuong
+                          ? isBoardGame
                             ? 'Xem Trực Tiếp 👁️'
                             : 'Đang chơi'
                           : 'Vào Chơi'}
@@ -434,7 +488,7 @@ export const Lobby: React.FC<LobbyProps> = ({
       {/* CREATE ROOM MODAL */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-emerald-500/40 w-full max-w-lg rounded-2xl p-6 shadow-2xl relative">
+          <div className="bg-slate-900 border border-emerald-500/40 w-full max-w-2xl rounded-2xl p-5 sm:p-6 shadow-2xl relative">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <PlusCircle className="w-5 h-5 text-emerald-400" />
@@ -453,52 +507,123 @@ export const Lobby: React.FC<LobbyProps> = ({
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
                   Chọn Thể Loại Chơi
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-[48vh] overflow-y-auto pr-1">
+                  {/* TIẾN LÊN MIỀN NAM */}
                   <button
                     type="button"
                     onClick={() => setSelectedRule('TIEN_LEN_MIEN_NAM')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                       selectedRule === 'TIEN_LEN_MIEN_NAM'
                         ? 'bg-emerald-950/60 border-emerald-500 ring-2 ring-emerald-500/30 text-white'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-2xl mb-2 block">♠</span>
-                    <span className="font-black text-sm block text-white">Tiến Lên MN</span>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      13 lá, so chất Cơ &gt; Rô &gt; Tép &gt; Bích, chặt heo.
+                    <span className="text-2xl mb-1.5 block">♠</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Tiến Lên MN</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      13 lá, chặt heo, tứ quý, tới trắng.
                     </span>
                   </button>
 
+                  {/* SÂM LỐC */}
                   <button
                     type="button"
                     onClick={() => setSelectedRule('SAM_LOC')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                       selectedRule === 'SAM_LOC'
                         ? 'bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/30 text-white'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-2xl mb-2 block">🔥</span>
-                    <span className="font-black text-sm block text-white">Sâm Lốc</span>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      10 lá, không so chất, có Báo Sâm, phạt thối 2.
+                    <span className="text-2xl mb-1.5 block">🔥</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Sâm Lốc</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      10 lá, không so chất, có Báo Sâm.
                     </span>
                   </button>
 
+                  {/* CỜ TƯỚNG */}
                   <button
                     type="button"
                     onClick={() => setSelectedRule('CO_TUONG')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                       selectedRule === 'CO_TUONG'
                         ? 'bg-red-950/60 border-red-500 ring-2 ring-red-500/30 text-white'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-2xl mb-2 block">🏆</span>
-                    <span className="font-black text-sm block text-white">Cờ Tướng</span>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      Tiêu chuẩn (60p + 30s) hoặc Cờ chớp (5p + 3s).
+                    <span className="text-2xl mb-1.5 block">🏆</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Tướng</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      Tiêu chuẩn hoặc cờ chớp 5 phút.
+                    </span>
+                  </button>
+
+                  {/* CỜ VUA */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRule('CO_VUA')}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'CO_VUA'
+                        ? 'bg-purple-950/60 border-purple-500 ring-2 ring-purple-500/30 text-white'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1.5 block">♟️</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Vua</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      FIDE 15p + 10s, có AI phân tích.
+                    </span>
+                  </button>
+
+                  {/* CỜ CARO */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRule('CARO')}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'CARO'
+                        ? 'bg-sky-950/60 border-sky-500 ring-2 ring-sky-500/30 text-white'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1.5 block">⭕</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Caro</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      Gomoku 15x15, chặn 2 đầu, 5 nước.
+                    </span>
+                  </button>
+
+                  {/* BẮN TÀU */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRule('BAN_TAU')}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'BAN_TAU'
+                        ? 'bg-cyan-950/60 border-cyan-500 ring-2 ring-cyan-500/30 text-white'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1.5 block">🚢</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Bắn Tàu Chiến</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      Battleship 10x10, bố trí hạm đội.
+                    </span>
+                  </button>
+
+                  {/* CỜ CÁ NGỰA */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRule('CO_CA_NGUA')}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'CO_CA_NGUA'
+                        ? 'bg-orange-950/60 border-orange-500 ring-2 ring-orange-500/30 text-white'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1.5 block">🎲</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Cá Ngựa</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      Ludo 2-4 người, xí ngầu 3D, đá ngựa.
                     </span>
                   </button>
                 </div>
@@ -555,7 +680,21 @@ export const Lobby: React.FC<LobbyProps> = ({
               )}
 
               <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs text-slate-400">
-                &bull; Phòng tối đa <strong>4 người</strong> {selectedRule === 'CO_TUONG' ? '(2 kỳ thủ Đỏ/Đen + 2 slot theo dõi)' : '(4 người chơi)'}.
+                &bull; Thể loại: <strong className="text-white">
+                  {selectedRule === 'TIEN_LEN_MIEN_NAM'
+                    ? 'Tiến Lên Miền Nam (Tối đa 4 người)'
+                    : selectedRule === 'SAM_LOC'
+                    ? 'Sâm Lốc (Tối đa 4 người)'
+                    : selectedRule === 'CO_TUONG'
+                    ? 'Cờ Tướng (2 kỳ thủ + slot theo dõi)'
+                    : selectedRule === 'CO_VUA'
+                    ? 'Cờ Vua (2 kỳ thủ + slot theo dõi)'
+                    : selectedRule === 'CARO'
+                    ? 'Cờ Caro (2 kỳ thủ + slot theo dõi)'
+                    : selectedRule === 'BAN_TAU'
+                    ? 'Bắn Tàu Chiến (2 chỉ huy + slot theo dõi)'
+                    : 'Cờ Cá Ngựa (2-4 người chơi)'}
+                </strong>.
                 <br />
                 &bull; Bạn sẽ tự động trở thành <strong>Chủ phòng (Host)</strong> và có quyền bắt đầu ván đấu.
               </div>

@@ -41,15 +41,16 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'SEATS' | 'CHAT'>('SEATS');
-  const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
+  const safeChatMessages = Array.isArray(chatMessages) ? chatMessages : [];
+  const [lastReadMessageCount, setLastReadMessageCount] = useState(safeChatMessages.length);
 
   useEffect(() => {
     if (mobileTab === 'CHAT') {
-      setLastReadMessageCount(chatMessages.length);
+      setLastReadMessageCount(safeChatMessages.length);
     }
-  }, [mobileTab, chatMessages.length]);
+  }, [mobileTab, safeChatMessages.length]);
 
-  const unreadChatCount = mobileTab === 'CHAT' ? 0 : Math.max(0, chatMessages.length - lastReadMessageCount);
+  const unreadChatCount = mobileTab === 'CHAT' ? 0 : Math.max(0, safeChatMessages.length - lastReadMessageCount);
 
   const me = roomState.players.find((p) => p.id === myPlayerId);
   const isHost = me?.isHost || false;
@@ -899,9 +900,11 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
         {/* Right Side: Chat */}
         <div className={`w-full lg:w-80 xl:w-[340px] shrink-0 h-[480px] lg:h-[520px] ${mobileTab === 'CHAT' ? 'block' : 'hidden lg:block'}`}>
           <KhungChat
-            chatMessages={chatMessages}
-            myPlayerId={myPlayerId}
             roomCode={roomState.code}
+            playerId={myPlayerId}
+            myPlayerId={myPlayerId}
+            messages={safeChatMessages}
+            chatMessages={safeChatMessages}
           />
         </div>
       </main>

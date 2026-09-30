@@ -321,7 +321,7 @@ export const BanPhom: React.FC<BanPhomProps> = ({
                 className="bg-slate-950/70 border border-purple-800/60 rounded-lg p-1 text-center"
               >
                 <div className="text-[9px] text-purple-300 font-bold uppercase">
-                  {m.type === 'STRAIGHT' ? 'Sảnh' : 'Sáp'}
+                  {m.type === 'CONSECUTIVE_SUIT' ? 'Sảnh' : 'Sáp'}
                 </div>
                 <div className="flex items-center justify-center gap-0.5">
                   {m.cards.map((c) => (
@@ -628,7 +628,7 @@ export const BanPhom: React.FC<BanPhomProps> = ({
                   className="bg-purple-950/80 border border-purple-600/60 rounded-xl px-2.5 py-1 flex items-center gap-1 shadow"
                 >
                   <span className="text-[10px] text-purple-300 font-bold uppercase mr-1">
-                    {m.type === 'STRAIGHT' ? 'Sảnh' : 'Sáp'}:
+                    {m.type === 'CONSECUTIVE_SUIT' ? 'Sảnh' : 'Sáp'}:
                   </span>
                   {m.cards.map((c) => (
                     <span
@@ -824,7 +824,7 @@ export const BanPhom: React.FC<BanPhomProps> = ({
       {/* Rule Guide Modal */}
       {isRuleModalOpen && (
         <RuleGuideModal
-          initialRule="PHOM"
+          initialRule="TIEN_LEN_MIEN_NAM"
           isOpen={isRuleModalOpen}
           onClose={() => setIsRuleModalOpen(false)}
         />
