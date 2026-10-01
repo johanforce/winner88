@@ -64,13 +64,19 @@ export default function App() {
         reconnectToken: prof.reconnectToken,
         initialScore: prof.score,
       },
-      (res: { success: boolean; message?: string }) => {
+      (res: { success: boolean; message?: string; roomState?: RoomPublicState }) => {
         isReconnectingRef.current = false;
-        if (!res.success) {
-          clearLastRoomCode();
-          setRoomState(null);
-          setCurrentScreen('LOBBY');
+        if (!res?.success) {
+          // Chỉ thoát ra sảnh nếu phòng thực sự không còn tồn tại
+          if (res?.message?.includes('không tồn tại') || res?.message?.includes('giải tán')) {
+            clearLastRoomCode();
+            setRoomState(null);
+            setCurrentScreen('LOBBY');
+          }
         } else {
+          if (res.roomState) {
+            setRoomState(res.roomState);
+          }
           saveLastRoomCode(roomCode);
           setCurrentScreen('ROOM');
         }
@@ -129,7 +135,11 @@ export default function App() {
         setProfile((prev) => (prev.score === me.score ? prev : { ...prev, score: me.score }));
       }
 
-      if (state.status === 'PLAYING' && currentProf.id) {
+      if (
+        state.status === 'PLAYING' &&
+        currentProf.id &&
+        (state.rule === 'TIEN_LEN_MIEN_NAM' || state.rule === 'SAM_LOC')
+      ) {
         socket.emit('GAME_GET_MY_CARDS', {
           roomCode: state.code,
           playerId: currentProf.id,

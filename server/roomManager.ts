@@ -52,6 +52,10 @@ export class RoomManager {
     this.playerRoomMap.delete(playerId);
   }
 
+  public getAllRooms(): GameRoom[] {
+    return Array.from(this.rooms.values());
+  }
+
   public getOpenRoomsList(): RoomListItem[] {
     const list: RoomListItem[] = [];
     this.rooms.forEach((room) => {
@@ -95,9 +99,9 @@ export class RoomManager {
         return;
       }
 
-      // If all players have been disconnected for over 3 minutes
+      // If all players have been disconnected for over 15 minutes
       const allDisconnected = room.players.every(
-        (p) => p.status === 'DISCONNECTED' && p.disconnectedAt && now - p.disconnectedAt > 180000
+        (p) => p.status === 'DISCONNECTED' && p.disconnectedAt && now - p.disconnectedAt > 900000
       );
       if (allDisconnected) {
         codesToDelete.push(code);

@@ -89,17 +89,17 @@ export function isLegalPiecePlacement(
     }
   }
 
-  // Soldier (Binh / Tốt)
+  // Soldier (Tốt)
   if (type === 'SOLDIER') {
     if (color === 'RED') {
-      // Binh Đỏ xuất phát ở y=6, tiến dần về y=0. Không bao giờ được ở y > 6 (không thể đi lùi)
+      // Tốt Đỏ xuất phát ở y=6, tiến dần về y=0. Không bao giờ được ở y > 6 (không thể đi lùi)
       if (y > 6) {
-        return { valid: false, reason: 'Binh Đỏ không thể lùi về sau hàng xuất phát (hàng 8, 9, 10)' };
+        return { valid: false, reason: 'Tốt Đỏ không thể lùi về sau hàng xuất phát (hàng 8, 9, 10)' };
       }
       // Chưa qua sông (y = 6 hoặc y = 5): chưa được đi ngang, chỉ ở cột xuất phát {0, 2, 4, 6, 8}
       if (y >= 5) {
         if (![0, 2, 4, 6, 8].includes(x)) {
-          return { valid: false, reason: 'Binh Đỏ chưa qua sông chỉ có thể ở các cột xuất phát (1, 3, 5, 7, 9)' };
+          return { valid: false, reason: 'Tốt Đỏ chưa qua sông chỉ có thể ở các cột xuất phát (1, 3, 5, 7, 9)' };
         }
       }
     } else {

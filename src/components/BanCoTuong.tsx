@@ -28,6 +28,8 @@ import {
   MicOff,
   Radio,
   Headphones,
+  Copy,
+  Check,
 } from 'lucide-react';
 import {
   RoomPublicState,
@@ -47,6 +49,8 @@ import {
   getPieceCharacter,
   getPieceNameVN,
   isSideInCheck,
+  formatMoveHistoryToKyPho,
+  reconstructBoardFromMoves,
 } from '../utils/xiangqiLogic';
 import { findBestXiangqiMove, XiangqiAiHint } from '../utils/xiangqiAi';
 
@@ -156,7 +160,16 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   // Endgame review & move inspection state
   const [isGameOverModalDismissed, setIsGameOverModalDismissed] = useState(false);
   const [selectedMoveIndex, setSelectedMoveIndex] = useState<number | null>(null);
+  const [copiedKyPho, setCopiedKyPho] = useState(false);
   const moveListEndRef = useRef<HTMLDivElement>(null);
+
+  const handleCopyKyPho = () => {
+    if (!xiangqi || xiangqi.moveHistory.length === 0) return;
+    const text = formatMoveHistoryToKyPho(xiangqi.moveHistory);
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedKyPho(true);
+    setTimeout(() => setCopiedKyPho(false), 2500);
+  };
 
   // Reset endgame modal dismissal and selected move when a new match starts
   useEffect(() => {
@@ -181,18 +194,27 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
     }
   }, [xiangqi?.winnerSide]);
 
+  // Reconstruct board state when reviewing a specific move in history
+  const displayedPieces = useMemo(() => {
+    if (!xiangqi) return [];
+    if (selectedMoveIndex !== null && xiangqi.moveHistory.length > 0) {
+      return reconstructBoardFromMoves(xiangqi.moveHistory, selectedMoveIndex);
+    }
+    return xiangqi.pieces;
+  }, [xiangqi, selectedMoveIndex]);
+
   // Find currently selected piece and calculate its legal moves
   const selectedPiece = useMemo(() => {
-    if (!selectedPieceId || !xiangqi) return null;
+    if (!selectedPieceId || !xiangqi || selectedMoveIndex !== null) return null;
     return xiangqi.pieces.find((p) => p.id === selectedPieceId) || null;
-  }, [selectedPieceId, xiangqi]);
+  }, [selectedPieceId, xiangqi, selectedMoveIndex]);
 
   const legalMoves = useMemo(() => {
-    if (!selectedPiece || !xiangqi) return [];
+    if (!selectedPiece || !xiangqi || selectedMoveIndex !== null) return [];
     // Only current turn player can see/make legal moves
     if (isSpectator || selectedPiece.color !== mySide || !isMyTurn) return [];
     return getLegalMoves(selectedPiece, xiangqi.pieces);
-  }, [selectedPiece, xiangqi, isSpectator, mySide, isMyTurn]);
+  }, [selectedPiece, xiangqi, isSpectator, mySide, isMyTurn, selectedMoveIndex]);
 
   // Captured pieces calculation
   const capturedPieces = useMemo(() => {
@@ -226,6 +248,9 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   // Click on a piece or intersection
   const handleIntersectionClick = (x: number, y: number) => {
     if (!xiangqi || xiangqi.winnerSide || isSpectator) return;
+    if (selectedMoveIndex !== null) {
+      setSelectedMoveIndex(null);
+    }
     setActionError(null);
 
     const clickedPiece = getPieceAt(xiangqi.pieces, x, y);
@@ -506,22 +531,42 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {xiangqi.moveHistory.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleCopyKyPho}
+                    id="btn-copy-ky-pho-banner"
+                    className="px-2.5 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 active:scale-95 text-emerald-300 text-xs font-bold rounded-xl border border-emerald-700/70 flex items-center gap-1.5 transition cursor-pointer"
+                    title="Sao chép toàn bộ kỳ phổ ván đấu để dán vào Simulator"
+                  >
+                    {copiedKyPho ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Đã Copy Kỳ Phổ!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Copy Kỳ Phổ</span>
+                      </>
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setActiveTab('MOVES')}
-                  className="px-2.5 py-1.5 bg-stone-800 hover:bg-stone-700 active:scale-95 text-stone-200 text-xs font-bold rounded-xl border border-stone-700 flex items-center gap-1.5 transition cursor-pointer"
+                  onClick={() => setIsSimulatorOpen(true)}
+                  className="px-2.5 py-1.5 bg-amber-950/80 hover:bg-amber-900 active:scale-95 text-amber-300 text-xs font-bold rounded-xl border border-amber-700/70 flex items-center gap-1.5 transition cursor-pointer"
                 >
-                  <History className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Ký Phổ Nước Đi</span>
+                  <span>🧩 Mở Simulator</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsGameOverModalDismissed(false)}
-                  className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 active:scale-95 text-stone-950 text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 transition cursor-pointer"
+                  onClick={handleResetToWaiting}
+                  className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white text-xs font-black rounded-xl shadow-md flex items-center gap-1.5 transition cursor-pointer"
                 >
-                  <Trophy className="w-3.5 h-3.5" />
-                  <span>Bảng Kết Quả</span>
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Rời Ra Phòng Chờ</span>
                 </button>
               </div>
             </div>
@@ -808,7 +853,7 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                     const x = isFlipped ? 8 - vx : vx;
                     const y = isFlipped ? 9 - vy : vy;
 
-                    const piece = xiangqi ? getPieceAt(xiangqi.pieces, x, y) : undefined;
+                    const piece = xiangqi ? getPieceAt(displayedPieces, x, y) : undefined;
                     const isSelected = selectedPiece?.x === x && selectedPiece?.y === y;
                     const isLegalTarget = legalMoves.some((m) => m.x === x && m.y === y);
                     const isLastMoveFrom =
@@ -1039,7 +1084,27 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
 
           {/* Action Toolbar when Game is Over - For all players and spectators */}
           {xiangqi?.winnerSide && (
-            <div className="w-full mt-3 flex items-center justify-center gap-2">
+            <div className="w-full mt-3 flex items-center justify-center gap-2 flex-wrap">
+              {xiangqi.moveHistory.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleCopyKyPho}
+                  id="btn-co-tuong-toolbar-copy-ky-pho"
+                  className="min-h-[42px] py-2 px-3 bg-stone-900 hover:bg-stone-800 border border-emerald-700/70 rounded-xl text-xs font-bold text-emerald-300 flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation"
+                >
+                  {copiedKyPho ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-400" />
+                      <span>Đã Copy Kỳ Phổ!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-emerald-400" />
+                      <span>Copy Kỳ Phổ</span>
+                    </>
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleResetToWaiting}
@@ -1047,15 +1112,15 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 className="flex-1 min-h-[42px] py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 rounded-xl text-xs font-bold text-white shadow-lg flex items-center justify-center gap-1.5 transition cursor-pointer touch-manipulation"
               >
                 <Users className="w-4 h-4" />
-                <span>Quay Về Phòng Chờ</span>
+                <span>Rời Ra Phòng Chờ</span>
               </button>
               <button
                 type="button"
                 onClick={() => setIsGameOverModalDismissed(false)}
-                className="py-2 px-3 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded-xl text-xs font-bold text-stone-300 flex items-center justify-center gap-1.5 transition cursor-pointer"
+                className="min-h-[42px] py-2 px-3 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded-xl text-xs font-bold text-stone-300 flex items-center justify-center gap-1.5 transition cursor-pointer"
               >
                 <Trophy className="w-4 h-4 text-amber-400" />
-                <span>Xem Kết Quả</span>
+                <span>Bảng Kết Quả</span>
               </button>
             </div>
           )}
@@ -1153,24 +1218,47 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
           {/* TAB CONTENT: MOVES BIÊN BẢN (KÝ PHỔ) */}
           {activeTab === 'MOVES' && (
             <div className="bg-stone-900/80 border border-stone-800 rounded-2xl p-4 flex flex-col h-[520px]">
-              <div className="flex items-center justify-between pb-2.5 border-b border-stone-800 mb-2">
+              <div className="flex items-center justify-between pb-2.5 border-b border-stone-800 mb-2 gap-2">
                 <div>
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                    <History className="w-3.5 h-3.5" /> Danh Sách Nước Đi ({xiangqi?.moveHistory.length || 0})
+                    <History className="w-3.5 h-3.5" /> Kỳ Phổ Nước Đi ({xiangqi?.moveHistory.length || 0})
                   </span>
                   <span className="text-[10px] text-stone-400">
                     Bấm vào nước cờ để xem lại vị trí trên bàn cờ
                   </span>
                 </div>
-                {selectedMoveIndex !== null && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMoveIndex(null)}
-                    className="text-[10px] font-bold text-cyan-400 hover:underline cursor-pointer"
-                  >
-                    Về tàn cuộc
-                  </button>
-                )}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {xiangqi && xiangqi.moveHistory.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleCopyKyPho}
+                      id="btn-copy-ky-pho-sidebar"
+                      className="px-2.5 py-1 bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-700/70 rounded-lg text-[11px] font-bold text-emerald-300 flex items-center gap-1 transition cursor-pointer"
+                      title="Copy lịch sử kỳ phổ để dán vào Simulator"
+                    >
+                      {copiedKyPho ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span>Đã Copy!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3 text-emerald-400" />
+                          <span>Copy Kỳ Phổ</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {selectedMoveIndex !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMoveIndex(null)}
+                      className="text-[10px] font-bold text-cyan-400 hover:underline cursor-pointer"
+                    >
+                      Về cuối
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Endgame Status Banner inside Moves Tab if finished */}
@@ -1586,50 +1674,32 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 </div>
               </div>
 
-              {/* BUTTON TO REVIEW ENDGAME AND MOVE HISTORY */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsGameOverModalDismissed(true);
-                  setActiveTab('MOVES');
-                }}
-                id="btn-co-tuong-review-endgame"
-                className="w-full py-3 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 hover:from-amber-400 hover:to-yellow-400 text-stone-950 font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
-              >
-                <Eye className="w-4 h-4" />
-                <span>Xem Thế Cờ Tàn Cuộc & Nước Đi ({xiangqi.moveHistory.length} nước)</span>
-              </button>
-
-              {/* Action buttons for all players and spectators */}
-              <div className="pt-2 space-y-2">
-                <div className="flex gap-2">
-                  {isHost && (
-                    <button
-                      type="button"
-                      onClick={handlePlayAgain}
-                      id="btn-co-tuong-rematch"
-                      className="flex-1 py-3 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white font-extrabold text-sm rounded-xl shadow-lg transition cursor-pointer"
-                    >
-                      Đấu Ván Mới
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleResetToWaiting}
-                    id="btn-co-tuong-back-waiting"
-                    className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm rounded-xl shadow-lg transition cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <Users className="w-4 h-4" />
-                    <span>Quay Về Phòng Chờ</span>
-                  </button>
-                </div>
+              {/* Action buttons: ONLY Review Moves and Return to Waiting Room (identical for Host and Guest) */}
+              <div className="pt-2 space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsGameOverModalDismissed(true);
+                    setActiveTab('MOVES');
+                    if (xiangqi.moveHistory.length > 0) {
+                      setSelectedMoveIndex(xiangqi.moveHistory.length - 1);
+                    }
+                  }}
+                  id="btn-co-tuong-review-endgame"
+                  className="w-full py-3 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500 hover:from-amber-400 hover:to-yellow-400 text-stone-950 font-black text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Xem Lại Nước Đi ({xiangqi.moveHistory.length} nước)</span>
+                </button>
 
                 <button
                   type="button"
-                  onClick={onLeaveRoom}
-                  className="w-full py-2.5 bg-stone-950 hover:bg-stone-900 text-stone-400 hover:text-white text-xs font-semibold rounded-xl border border-stone-800 transition cursor-pointer"
+                  onClick={handleResetToWaiting}
+                  id="btn-co-tuong-back-waiting"
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm rounded-xl shadow-lg transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
                 >
-                  Rời Phòng Chơi
+                  <Users className="w-4 h-4" />
+                  <span>Rời Ra Phòng Chờ</span>
                 </button>
               </div>
             </div>

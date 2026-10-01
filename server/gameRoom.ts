@@ -154,17 +154,9 @@ export class GameRoom {
     // Check if player is reconnecting
     const existingPlayer = this.players.find((p) => p.id === id);
     if (existingPlayer) {
-      existingPlayer.socketId = socketId;
+      this.markPlayerActive(id, socketId);
       existingPlayer.name = name;
       existingPlayer.avatar = avatar;
-      existingPlayer.status = this.status === 'PLAYING' ? 'PLAYING' : 'WAITING';
-      existingPlayer.disconnectedAt = null;
-
-      const timer = this.disconnectTimers.get(id);
-      if (timer) {
-        clearTimeout(timer);
-        this.disconnectTimers.delete(id);
-      }
 
       this.onStateChange();
       return { success: true };
@@ -414,6 +406,23 @@ export class GameRoom {
     return { success: true };
   }
 
+  public markPlayerActive(playerId: string, socketId: string) {
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player) return;
+
+    player.socketId = socketId;
+    player.disconnectedAt = null;
+    if (player.status === 'DISCONNECTED') {
+      player.status = this.status === 'PLAYING' ? 'PLAYING' : 'WAITING';
+    }
+
+    const timer = this.disconnectTimers.get(playerId);
+    if (timer) {
+      clearTimeout(timer);
+      this.disconnectTimers.delete(playerId);
+    }
+  }
+
   public removePlayer(playerId: string, reason: string = 'LEAVE') {
     const playerIndex = this.players.findIndex((p) => p.id === playerId);
     if (playerIndex === -1) return;
@@ -438,13 +447,32 @@ export class GameRoom {
       this.autoTransferHost();
     }
 
-    // Handle in-game disconnect
-    if (this.status === 'PLAYING') {
-      const activePlayingPlayers = this.players.filter(
-        (p) => p.status === 'PLAYING' && !p.isSpectator && p.socketId !== null
-      );
-      if (activePlayingPlayers.length <= 1) {
-        this.endGamePrematurely();
+    // Handle in-game leave/disconnect ONLY if the removed player was an active participant (not a spectator)
+    if (this.status === 'PLAYING' && !player.isSpectator) {
+      if (this.rule === 'CO_TUONG' && this.xiangqiState && !this.xiangqiState.winnerSide) {
+        const isRed = player.id === this.xiangqiState.redPlayerId;
+        const isBlack = player.id === this.xiangqiState.blackPlayerId;
+        if (isRed || isBlack) {
+          this.stopTimer();
+          const winnerSide: XiangqiSide = isRed ? 'BLACK' : 'RED';
+          this.xiangqiState.winnerSide = winnerSide;
+          this.xiangqiState.winReason = 'RESIGN';
+          this.status = 'FINISHED';
+
+          const winnerId =
+            winnerSide === 'RED' ? this.xiangqiState.redPlayerId : this.xiangqiState.blackPlayerId;
+          const winner = this.players.find((p) => p.id === winnerId);
+          if (winner) {
+            winner.score += 100;
+          }
+        }
+      } else {
+        const activePlayingPlayers = this.players.filter(
+          (p) => !p.isSpectator && p.status !== 'FINISHED'
+        );
+        if (activePlayingPlayers.length <= 1) {
+          this.endGamePrematurely();
+        }
       }
     }
 
@@ -465,13 +493,14 @@ export class GameRoom {
       clearTimeout(prevTimer);
     }
 
+    // Giữ người chơi trong phòng tối đa 15 phút để tránh bị văng phòng khi mạng chập chờn hoặc chuyển tab
     const timer = setTimeout(() => {
       this.disconnectTimers.delete(player.id);
       const target = this.players.find((p) => p.id === player.id);
-      if (target && target.status === 'DISCONNECTED') {
+      if (target && target.status === 'DISCONNECTED' && target.socketId === null) {
         this.removePlayer(target.id, 'DISCONNECTED');
       }
-    }, 60000);
+    }, 900000);
 
     this.disconnectTimers.set(player.id, timer);
 
@@ -640,6 +669,7 @@ export class GameRoom {
       this.currentTurnPlayerId = p1.id;
       this.players.forEach((p) => {
         p.status = 'PLAYING';
+        p.returnedToWaiting = false;
       });
 
       this.addSystemChat(
@@ -689,6 +719,7 @@ export class GameRoom {
 
       this.players.forEach((p) => {
         p.status = 'PLAYING';
+        p.returnedToWaiting = false;
       });
 
       this.addSystemChat(
@@ -745,6 +776,7 @@ export class GameRoom {
 
       this.players.forEach((p) => {
         p.status = 'PLAYING';
+        p.returnedToWaiting = false;
       });
 
       const modeTitle = isStandard
@@ -809,6 +841,7 @@ export class GameRoom {
 
     this.players.forEach((p) => {
       p.status = 'PLAYING';
+      p.returnedToWaiting = false;
       p.cards = [];
       delete p.rank;
     });
@@ -1631,6 +1664,7 @@ export class GameRoom {
     }
 
     const targetPiece = getPieceAt(this.xiangqiState.pieces, to.x, to.y);
+    const notation = generateMoveNotation(piece, to, targetPiece, this.xiangqiState.pieces);
 
     const nextPieces = this.xiangqiState.pieces
       .filter((p) => !(p.x === to.x && p.y === to.y))
@@ -1647,8 +1681,6 @@ export class GameRoom {
     const isCheck = isSideInCheck(oppSide, nextPieces);
     this.xiangqiState.isCheck = isCheck;
     this.xiangqiState.checkSide = isCheck ? oppSide : null;
-
-    const notation = generateMoveNotation(piece, to, targetPiece);
 
     const moveRecord: XiangqiMove = {
       from,
@@ -2435,6 +2467,7 @@ export class GameRoom {
 
     this.players.forEach((p) => {
       p.status = 'WAITING';
+      p.returnedToWaiting = false;
       p.hasPassedCurrentRound = false;
       p.cards = [];
       p.ships = [];
@@ -2453,6 +2486,7 @@ export class GameRoom {
       this.xiangqiState.moveHistory = [];
       this.xiangqiState.redTimeRemaining = this.xiangqiState.initialBlitzTime;
       this.xiangqiState.blackTimeRemaining = this.xiangqiState.initialBlitzTime;
+      this.xiangqiPositionHistory = [];
     }
 
     if (this.caroState) {
@@ -2487,6 +2521,10 @@ export class GameRoom {
     const player = this.players.find((p) => p.id === playerId);
     if (!player) return { success: false, message: 'Không tìm thấy người chơi' };
 
+    if (this.status === 'PLAYING') {
+      return { success: false, message: 'Trận đấu đang diễn ra, chưa thể về phòng chờ' };
+    }
+
     player.returnedToWaiting = true;
 
     // Kiểm tra xem tất cả người chơi chính đã bấm quay về phòng chờ chưa
@@ -2501,10 +2539,15 @@ export class GameRoom {
           : true)
     );
 
-    const allReturned = activeParticipants.every((p) => p.returnedToWaiting === true);
+    const allReturned =
+      activeParticipants.length === 0 || activeParticipants.every((p) => p.returnedToWaiting === true);
     if (allReturned) {
       this.status = 'WAITING';
       this.stopTimer();
+      this.players.forEach((p) => {
+        p.status = 'WAITING';
+        p.returnedToWaiting = false;
+      });
     }
 
     this.onStateChange();

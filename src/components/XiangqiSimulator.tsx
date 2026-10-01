@@ -23,6 +23,9 @@ import {
   Award,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  History,
   Flame,
   Info,
 } from 'lucide-react';
@@ -39,6 +42,8 @@ import {
   isInsidePalace,
   getBoardPositionKey,
   checkRepetitiveMovesDraw,
+  parseKyPhoToMoveHistory,
+  formatMoveHistoryToKyPho,
 } from '../utils/xiangqiLogic';
 import { findBestXiangqiMove, XiangqiAiHint } from '../utils/xiangqiAi';
 import {
@@ -56,7 +61,7 @@ interface XiangqiSimulatorProps {
   onClose: () => void;
 }
 
-type SimulatorMode = 'SETUP' | 'SOLVING';
+type SimulatorMode = 'SETUP' | 'SOLVING' | 'KY_PHO_REPLAY';
 type SolvingOpponent = 'SOLO' | 'AI_DEFENDER';
 
 export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onClose }) => {
@@ -127,6 +132,13 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
   const [fenInputText, setFenInputText] = useState<string>('');
   const [fenCopyFeedback, setFenCopyFeedback] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Kỳ Phổ Replay state
+  const [kyPhoInputText, setKyPhoInputText] = useState<string>('');
+  const [kyPhoMoves, setKyPhoMoves] = useState<XiangqiMove[]>([]);
+  const [kyPhoBoardHistory, setKyPhoBoardHistory] = useState<XiangqiPiece[][]>([]);
+  const [kyPhoStepIndex, setKyPhoStepIndex] = useState<number>(-1);
+  const [isPlayingFromKyPho, setIsPlayingFromKyPho] = useState<boolean>(false);
 
   // Compute piece counts per type and color on current board
   const currentPieceCounts = useMemo(() => {
@@ -296,11 +308,109 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
   // Return to Setup mode
   const handleReturnToSetup = () => {
     setMode('SETUP');
+    setIsPlayingFromKyPho(false);
     setSelectedPieceId(null);
     setAiHint(null);
     setIsSolvedWon(false);
     setIsStalemate(false);
     setIsRepetitionDraw(false);
+  };
+
+  // Load and replay pasted Kỳ Phổ text
+  const handleLoadKyPho = (rawText?: string) => {
+    const textToParse = (rawText !== undefined ? rawText : kyPhoInputText).trim();
+    if (!textToParse) {
+      setValidationError('Vui lòng dán nội dung lịch sử Kỳ Phổ vào ô trống trước khi tái hiện.');
+      setTimeout(() => setValidationError(null), 3500);
+      return;
+    }
+
+    const parsed = parseKyPhoToMoveHistory(textToParse);
+    if (!parsed.success || parsed.moves.length === 0) {
+      setValidationError(parsed.error || 'Không thể đọc Kỳ Phổ. Vui lòng kiểm tra lại định dạng.');
+      setTimeout(() => setValidationError(null), 4500);
+      return;
+    }
+
+    setKyPhoMoves(parsed.moves);
+    setKyPhoBoardHistory(parsed.boardHistory);
+    // Bắt đầu ở nước đầu tiên (step 0) để người chơi tiện bấm Next / Back
+    const startStep = 0;
+    setKyPhoStepIndex(startStep);
+    const stepPieces = JSON.parse(JSON.stringify(parsed.boardHistory[startStep + 1])) as XiangqiPiece[];
+    const nextTurn: XiangqiSide = (startStep + 1) % 2 === 0 ? 'RED' : 'BLACK';
+    setPieces(stepPieces);
+    setTurnSide(nextTurn);
+    setLastMove(parsed.moves[startStep]);
+    setIsCheck(isSideInCheck(nextTurn, stepPieces));
+    setSelectedPieceId(null);
+    setSelectedTrayItem(null);
+    setAiHint(null);
+    setIsSolvedWon(false);
+    setIsStalemate(false);
+    setIsRepetitionDraw(false);
+    setMode('KY_PHO_REPLAY');
+
+    if (parsed.error) {
+      setStatusMessage(`Đã nạp ${parsed.moves.length} nước đi từ Kỳ Phổ (${parsed.error}).`);
+    } else {
+      setStatusMessage(`Đã tái hiện thành công ${parsed.moves.length} nước đi từ Kỳ Phổ!`);
+    }
+    setTimeout(() => setStatusMessage(null), 4000);
+  };
+
+  // Navigate to a specific step in Kỳ Phổ Replay mode (-1 = initial 32 pieces, 0..N-1 = after move #1..#N)
+  const handleSelectKyPhoStep = (stepIdx: number) => {
+    if (kyPhoBoardHistory.length === 0) return;
+    const clamped = Math.max(-1, Math.min(kyPhoMoves.length - 1, stepIdx));
+    setKyPhoStepIndex(clamped);
+    const boardAtStep = JSON.parse(JSON.stringify(kyPhoBoardHistory[clamped + 1])) as XiangqiPiece[];
+    const nextSide: XiangqiSide = (clamped + 1) % 2 === 0 ? 'RED' : 'BLACK';
+    setPieces(boardAtStep);
+    setTurnSide(nextSide);
+    setLastMove(clamped >= 0 ? kyPhoMoves[clamped] : null);
+    setIsCheck(isSideInCheck(nextSide, boardAtStep));
+    setSelectedPieceId(null);
+  };
+
+  // Enter free-play match from current Kỳ Phổ step (no AI, player moves pieces of both sides freely)
+  const handleEnterMatchFromKyPho = () => {
+    if (kyPhoBoardHistory.length === 0) return;
+    const currentStepPieces = JSON.parse(
+      JSON.stringify(kyPhoBoardHistory[kyPhoStepIndex + 1])
+    ) as XiangqiPiece[];
+    const currentNextSide: XiangqiSide = (kyPhoStepIndex + 1) % 2 === 0 ? 'RED' : 'BLACK';
+    const historyUpToStep = kyPhoStepIndex >= 0 ? kyPhoMoves.slice(0, kyPhoStepIndex + 1) : [];
+
+    setInitialSnapshotPieces(JSON.parse(JSON.stringify(currentStepPieces)));
+    setInitialSideToMove(currentNextSide);
+    setPieces(currentStepPieces);
+    setTurnSide(currentNextSide);
+    setSolvingOpponent('SOLO'); // Tuyệt đối không có máy/AI đánh, người chơi tự do đi quân 2 bên
+    setIsPlayingFromKyPho(true);
+    setMode('SOLVING');
+    setSelectedPieceId(null);
+    setMoveHistory(historyUpToStep);
+    setRedoStack([]);
+    setLastMove(kyPhoStepIndex >= 0 ? kyPhoMoves[kyPhoStepIndex] : null);
+    setIsSolvedWon(false);
+    setIsStalemate(false);
+    setIsRepetitionDraw(false);
+    setAiHint(null);
+
+    const posKeys: string[] = [];
+    for (let i = 0; i <= kyPhoStepIndex + 1; i++) {
+      const s: XiangqiSide = i % 2 === 0 ? 'RED' : 'BLACK';
+      posKeys.push(getBoardPositionKey(kyPhoBoardHistory[i], s));
+    }
+    setPositionHistory(posKeys);
+
+    const inCheck = isSideInCheck(currentNextSide, currentStepPieces);
+    setIsCheck(inCheck);
+    setStatusMessage(
+      `⚔️ Đã vào bàn cờ từ nước #${kyPhoStepIndex + 1}. Bạn được tự do di chuyển quân cả 2 bên (không có AI)!`
+    );
+    setTimeout(() => setStatusMessage(null), 4000);
   };
 
   // Reset to beginning of current puzzle
@@ -315,14 +425,14 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
       setPositionHistory([initialPosKey]);
     }
     setSelectedPieceId(null);
-    setMoveHistory([]);
+    setMoveHistory(isPlayingFromKyPho && kyPhoStepIndex >= 0 ? kyPhoMoves.slice(0, kyPhoStepIndex + 1) : []);
     setRedoStack([]);
-    setLastMove(null);
+    setLastMove(isPlayingFromKyPho && kyPhoStepIndex >= 0 ? kyPhoMoves[kyPhoStepIndex] : null);
     setIsSolvedWon(false);
     setIsStalemate(false);
     setIsRepetitionDraw(false);
     setAiHint(null);
-    setStatusMessage('Đã khôi phục thế cờ ban đầu.');
+    setStatusMessage('Đã khôi phục thế cờ tại điểm bắt đầu.');
     setTimeout(() => setStatusMessage(null), 2000);
 
     // If vs AI and AI goes first
@@ -345,7 +455,7 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
     to: { x: number; y: number },
     targetPiece?: XiangqiPiece
   ) => {
-    const notation = generateMoveNotation(fromPiece, to, targetPiece);
+    const notation = generateMoveNotation(fromPiece, to, targetPiece, pieces);
 
     // Save for undo
     const oldPieces = JSON.parse(JSON.stringify(pieces)) as XiangqiPiece[];
@@ -454,7 +564,7 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
     currentTurn: XiangqiSide,
     targetPiece?: XiangqiPiece
   ) => {
-    const notation = generateMoveNotation(aiPiece, to, targetPiece);
+    const notation = generateMoveNotation(aiPiece, to, targetPiece, currentPieces);
     const updatedPieces = currentPieces
       .filter((p) => !(p.x === to.x && p.y === to.y))
       .map((p) => {
@@ -540,10 +650,13 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
     // In AI mode, undo 2 moves (player + AI) if available
     const stepsToUndo = solvingOpponent === 'AI_DEFENDER' && moveHistory.length >= 2 ? 2 : 1;
 
-    // Reconstruct pieces from initial snapshot + remaining history
+    // Reconstruct pieces from initial start of moveHistory
     const targetMoveCount = moveHistory.length - stepsToUndo;
-    let reconstructedPieces = JSON.parse(JSON.stringify(initialSnapshotPieces)) as XiangqiPiece[];
-    let currentSide = initialSideToMove;
+    let reconstructedPieces =
+      isPlayingFromKyPho && kyPhoBoardHistory.length > 0
+        ? (JSON.parse(JSON.stringify(kyPhoBoardHistory[0])) as XiangqiPiece[])
+        : (JSON.parse(JSON.stringify(initialSnapshotPieces)) as XiangqiPiece[]);
+    let currentSide: XiangqiSide = isPlayingFromKyPho ? 'RED' : initialSideToMove;
 
     for (let i = 0; i < targetMoveCount; i++) {
       const histMove = moveHistory[i];
@@ -578,7 +691,7 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
   const handleCellClick = (x: number, y: number) => {
     if (mode === 'SETUP') {
       handleSetupCellClick(x, y);
-    } else {
+    } else if (mode === 'SOLVING') {
       handleSolvingCellClick(x, y);
     }
   };
@@ -750,7 +863,7 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
     { type: 'CHARIOT', name: 'Xe' },
     { type: 'CANNON', name: 'Pháo' },
     { type: 'HORSE', name: 'Mã' },
-    { type: 'SOLDIER', name: 'Binh' },
+    { type: 'SOLDIER', name: 'Tốt' },
   ];
 
   const trayPiecesBlack: { type: XiangqiPieceType; name: string }[] = [
@@ -782,12 +895,18 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
                 <h2 className="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-2">
                   Cờ Thế & Simulator
                   <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    {mode === 'SETUP' ? 'Chế độ Tự Xếp Cờ' : 'Chế độ Đang Giải'}
+                    {mode === 'SETUP'
+                      ? 'Chế độ Tự Xếp Cờ'
+                      : mode === 'KY_PHO_REPLAY'
+                      ? 'Xem Lại Kỳ Phổ'
+                      : isPlayingFromKyPho
+                      ? 'Đánh Thử Từ Kỳ Phổ (Tự Do)'
+                      : 'Chế độ Đang Giải'}
                   </span>
                 </h2>
               </div>
               <p className="text-[11px] text-stone-400 font-medium hidden sm:block">
-                Tự do dàn xếp quân cờ thế, nghiên cứu biến hóa, giải đố giang hồ & luyện tập với AI.
+                Tự do dàn xếp quân cờ thế, dán kỳ phổ để xem lại từng bước và vào trận đi thử các nước cờ.
               </p>
             </div>
           </div>
@@ -808,16 +927,51 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
                 <Play className="w-4 h-4 fill-current" />
                 <span>Bắt Đầu Giải</span>
               </button>
+            ) : mode === 'KY_PHO_REPLAY' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleEnterMatchFromKyPho}
+                  id="btn-header-enter-match-ky-pho"
+                  className="px-3.5 sm:px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg flex items-center gap-1.5 transition cursor-pointer"
+                  title="Vào trận tại nước đi này để tự do đi thử các quân"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>Vào Trận Tại Nước Này</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReturnToSetup}
+                  className="px-3 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs rounded-xl border border-stone-700 transition cursor-pointer"
+                >
+                  Xếp Cờ
+                </button>
+              </>
             ) : (
-              <button
-                type="button"
-                onClick={handleReturnToSetup}
-                className="px-3 sm:px-4 py-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-stone-950 font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
-                title="Quay lại xếp cờ"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Sửa Thế Cờ</span>
-              </button>
+              <>
+                {isPlayingFromKyPho && kyPhoMoves.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSelectKyPhoStep(kyPhoStepIndex);
+                      setMode('KY_PHO_REPLAY');
+                    }}
+                    className="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-stone-950 font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <History className="w-4 h-4" />
+                    <span>Quay Lại Kỳ Phổ</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleReturnToSetup}
+                  className="px-3 sm:px-4 py-2 bg-amber-600 hover:bg-amber-500 active:scale-95 text-stone-950 font-black text-xs sm:text-sm rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                  title="Quay lại xếp cờ"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Sửa Thế Cờ</span>
+                </button>
+              </>
             )}
 
             <button
@@ -891,20 +1045,32 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
                 )}
               </div>
 
-              {/* Lật bàn chỉ hiển thị trước khi giải (chế độ Setup), bỏ trong khi giải */}
-              {mode === 'SETUP' && (
-                <div className="flex items-center gap-1.5">
+              {/* Lật bàn & Đổi lượt tự do (trong chế độ Setup, Xem kỳ phổ hoặc Tự giải 2 bên) */}
+              <div className="flex items-center gap-1.5">
+                {mode === 'SOLVING' && solvingOpponent === 'SOLO' && (
                   <button
                     type="button"
-                    onClick={() => setIsFlipped((prev) => !prev)}
-                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-semibold rounded-xl border border-stone-700 flex items-center gap-1 transition cursor-pointer"
-                    title="Đổi chiều nhìn bàn cờ"
+                    onClick={() => {
+                      const next = turnSide === 'RED' ? 'BLACK' : 'RED';
+                      setTurnSide(next);
+                      setSelectedPieceId(null);
+                    }}
+                    className="px-2 py-1 bg-stone-800 hover:bg-stone-700 text-amber-300 text-[11px] font-bold rounded-xl border border-stone-700 transition cursor-pointer"
+                    title="Đổi bên đi tiếp theo"
                   >
-                    <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="hidden sm:inline">Lật bàn</span>
+                    Đổi lượt Đỏ/Đen
                   </button>
-                </div>
-              )}
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsFlipped((prev) => !prev)}
+                  className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-semibold rounded-xl border border-stone-700 flex items-center gap-1 transition cursor-pointer"
+                  title="Đổi chiều nhìn bàn cờ"
+                >
+                  <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Lật bàn</span>
+                </button>
+              </div>
             </div>
 
             {/* THE XIANGQI BOARD (AUTHENTIC 9:10 GRID) */}
@@ -1139,6 +1305,60 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
             {/* MODE: SETUP CONTROLS */}
             {mode === 'SETUP' ? (
               <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+                {/* KỲ PHỔ PASTE & REPLAY BOX */}
+                <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-950/50 via-stone-950 to-stone-950 border border-emerald-600/50 space-y-2.5 shadow-lg">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs sm:text-sm font-black text-emerald-300 flex items-center gap-1.5">
+                      <History className="w-4 h-4 text-emerald-400" />
+                      <span>Dán Lịch Sử Kỳ Phổ (Xem Lại & Vào Trận)</span>
+                    </h3>
+                    {kyPhoMoves.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSelectKyPhoStep(kyPhoStepIndex);
+                          setMode('KY_PHO_REPLAY');
+                        }}
+                        className="text-[11px] font-bold text-cyan-400 hover:underline cursor-pointer"
+                      >
+                        Mở lại kỳ phổ ({kyPhoMoves.length} nước) &rarr;
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-stone-300 leading-relaxed">
+                    Dán kỳ phổ vừa copy từ trận đấu vào ô dưới để tái hiện ván cờ, tua Next/Back từng bước và bấm <strong>Vào Trận</strong> tại bất kỳ nước đi nào.
+                  </p>
+                  <textarea
+                    id="simulator-ky-pho-input"
+                    rows={3}
+                    value={kyPhoInputText}
+                    onChange={(e) => setKyPhoInputText(e.target.value)}
+                    placeholder="Dán lịch sử kỳ phổ vào đây (VD: 1. Pháo 2 bình 5 | Mã 8 tấn 7 ...)"
+                    className="w-full px-3 py-2 bg-stone-950 border border-stone-700 focus:border-emerald-400 rounded-xl text-xs font-mono text-stone-100 placeholder-stone-500 outline-none resize-none transition"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      id="btn-load-ky-pho"
+                      onClick={() => handleLoadKyPho()}
+                      className="flex-1 py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Tái Hiện Kỳ Phổ</span>
+                    </button>
+                    {kyPhoInputText && (
+                      <button
+                        type="button"
+                        onClick={() => setKyPhoInputText('')}
+                        className="py-2 px-2.5 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-bold rounded-xl border border-stone-700 transition cursor-pointer"
+                        title="Xóa ô nhập"
+                      >
+                        Xóa
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 {/* Preset banner */}
                 <div className="flex items-center justify-between">
                   <div>
@@ -1513,8 +1733,158 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
                   <span>{boardValidation.message}</span>
                 </div>
               </div>
+            ) : mode === 'KY_PHO_REPLAY' ? (
+              /* MODE: KỲ PHỔ REPLAY CONTROLS (NEXT/BACK STEPPER & ENTER MATCH) */
+              <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4 flex flex-col">
+                <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+                  <div>
+                    <h3 className="text-sm font-black text-emerald-300 flex items-center gap-1.5">
+                      <History className="w-4 h-4 text-emerald-400" />
+                      <span>Tái Hiện Kỳ Phổ ({kyPhoMoves.length} nước)</span>
+                    </h3>
+                    <p className="text-[11px] text-stone-400 mt-0.5">
+                      Bấm Next / Back hoặc chọn nước cờ bên dưới, sau đó bấm &quot;Vào Trận&quot; để đánh thử.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleReturnToSetup}
+                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-bold rounded-lg border border-stone-700 transition cursor-pointer"
+                  >
+                    Đổi Kỳ Phổ
+                  </button>
+                </div>
+
+                {/* Stepper Controls Bar */}
+                <div className="flex items-center justify-between gap-1 py-1.5 px-2.5 bg-stone-950 rounded-xl border border-stone-800 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectKyPhoStep(-1)}
+                    disabled={kyPhoStepIndex <= -1}
+                    className="p-1.5 rounded-lg hover:bg-stone-800 disabled:opacity-30 text-stone-300 hover:text-white transition cursor-pointer"
+                    title="Về bàn cờ xuất phát (trước nước 1)"
+                  >
+                    <ChevronsLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-ky-pho-prev"
+                    onClick={() => handleSelectKyPhoStep(kyPhoStepIndex - 1)}
+                    disabled={kyPhoStepIndex <= -1}
+                    className="px-2.5 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-30 text-stone-200 font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="Lùi 1 nước (Back)"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Back</span>
+                  </button>
+                  <span className="text-xs font-black text-cyan-400 px-2">
+                    {kyPhoStepIndex < 0
+                      ? 'Bàn cờ đầu'
+                      : `Nước ${kyPhoStepIndex + 1} / ${kyPhoMoves.length}`}
+                  </span>
+                  <button
+                    type="button"
+                    id="btn-ky-pho-next"
+                    onClick={() => handleSelectKyPhoStep(kyPhoStepIndex + 1)}
+                    disabled={kyPhoStepIndex >= kyPhoMoves.length - 1}
+                    className="px-2.5 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 disabled:opacity-30 text-stone-200 font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="Tiến 1 nước (Next)"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectKyPhoStep(kyPhoMoves.length - 1)}
+                    disabled={kyPhoStepIndex >= kyPhoMoves.length - 1}
+                    className="p-1.5 rounded-lg hover:bg-stone-800 disabled:opacity-30 text-stone-300 hover:text-white transition cursor-pointer"
+                    title="Đến nước cuối cùng"
+                  >
+                    <ChevronsRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Primary Button: Enter Match from this step */}
+                <button
+                  type="button"
+                  id="btn-enter-match-from-ky-pho"
+                  onClick={handleEnterMatchFromKyPho}
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs sm:text-sm rounded-xl shadow-lg flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>
+                    Vào Trận Tại {kyPhoStepIndex < 0 ? 'Bàn Cờ Đầu' : `Nước #${kyPhoStepIndex + 1}`} (Tự Do Đi Quân)
+                  </span>
+                </button>
+
+                {/* Clickable Move List */}
+                <div className="flex-1 max-h-64 overflow-y-auto space-y-1.5 pr-1 text-xs bg-stone-950/60 p-2.5 rounded-xl border border-stone-800">
+                  {kyPhoMoves.map((m, idx) => {
+                    const isSelected = kyPhoStepIndex === idx;
+                    const isRed = m.piece.color === 'RED';
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => handleSelectKyPhoStep(idx)}
+                        className={`px-3 py-2 rounded-xl flex items-center justify-between font-mono transition cursor-pointer border ${
+                          isSelected
+                            ? 'bg-cyan-950/80 border-cyan-500 ring-2 ring-cyan-500/40 text-white shadow'
+                            : 'bg-stone-900/70 border-stone-800 hover:border-stone-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-stone-500 w-6 font-bold">{idx + 1}.</span>
+                          <span className="text-xs">{isRed ? '🔴' : '⚫'}</span>
+                          <span
+                            className={`font-black text-xs ${
+                              isSelected ? 'text-cyan-300' : isRed ? 'text-red-400' : 'text-stone-200'
+                            }`}
+                          >
+                            {m.notation}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {m.capturedPiece && (
+                            <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-800 px-1.5 py-0.5 rounded font-bold">
+                              Ăn {getPieceNameVN(m.capturedPiece.type, m.capturedPiece.color)}
+                            </span>
+                          )}
+                          {m.isCheck && (
+                            <span className="text-[10px] bg-rose-950 text-rose-300 border border-rose-800 px-1.5 py-0.5 rounded font-black">
+                              ⚡ Chiếu
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Quick Paste Another Ky Pho */}
+                <div className="pt-2 border-t border-stone-800 space-y-2">
+                  <label className="block text-[11px] font-bold text-stone-400">
+                    Dán kỳ phổ khác:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={kyPhoInputText}
+                      onChange={(e) => setKyPhoInputText(e.target.value)}
+                      placeholder="Dán lịch sử kỳ phổ vào đây..."
+                      className="flex-1 px-3 py-1.5 bg-stone-950 border border-stone-800 focus:border-emerald-500 rounded-xl text-xs font-mono text-stone-200 outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleLoadKyPho()}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shrink-0"
+                    >
+                      Nạp
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : (
-              /* MODE: SOLVING CONTROLS (ĐÃ BỎ CHỌN BÊN, ĐẤU MÁY, LẬT BÀN TRONG KHI GIẢI) */
+              /* MODE: SOLVING CONTROLS */
               <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
                 {/* Active Match Info Card */}
                 <div className="p-3 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
@@ -1528,29 +1898,43 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
                       ) : (
                         <>
                           <User className="w-4 h-4 text-emerald-400" />
-                          <span>Tự Giải 2 Bên</span>
+                          <span>{isPlayingFromKyPho ? 'Chơi Thử Từ Kỳ Phổ (Tự Do 2 Bên)' : 'Tự Giải 2 Bên'}</span>
                         </>
                       )}
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleReturnToSetup}
-                      className="text-[11px] text-amber-400/90 hover:text-amber-300 underline font-semibold flex items-center gap-1 cursor-pointer"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Sửa thế / Đổi bên</span>
-                    </button>
+                    {isPlayingFromKyPho && kyPhoMoves.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleSelectKyPhoStep(kyPhoStepIndex);
+                          setMode('KY_PHO_REPLAY');
+                        }}
+                        className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        <History className="w-3 h-3" />
+                        <span>Về xem Kỳ Phổ</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleReturnToSetup}
+                        className="text-[11px] text-amber-400/90 hover:text-amber-300 underline font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Sửa thế / Đổi bên</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-stone-800/80">
                     <div>
-                      <span className="text-stone-500 block text-[10px]">Phe bạn cầm:</span>
+                      <span className="text-stone-500 block text-[10px]">Chế độ điều khiển:</span>
                       <span className="font-bold text-stone-200">
                         {solvingOpponent === 'AI_DEFENDER'
                           ? humanSide === 'RED'
                             ? '🔴 Đỏ (Máy cầm Đen)'
                             : '⚫ Đen (Máy cầm Đỏ)'
-                          : 'Tự điều khiển 2 bên'}
+                          : 'Tự do đi quân cả 2 bên (Không có AI)'}
                       </span>
                     </div>
                     <div>
@@ -1562,8 +1946,8 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
                   </div>
                 </div>
 
-                {/* Solving Actions Row: Undo, Hint, Reset */}
-                <div className="grid grid-cols-3 gap-2">
+                {/* Solving Actions Row: Undo, Hint (hidden when playing from Ky Pho solo if desired, or kept), Reset */}
+                <div className={`grid ${isPlayingFromKyPho ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
                   {/* Undo Button */}
                   <button
                     type="button"
@@ -1573,35 +1957,37 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
                     title="Đi lại nước trước"
                   >
                     <ChevronLeft className="w-4 h-4 text-amber-400" />
-                    <span>Hoàn tác</span>
+                    <span>Lùi nước (Undo)</span>
                   </button>
 
-                  {/* AI Hint Button */}
-                  <button
-                    type="button"
-                    onClick={handleRequestHint}
-                    disabled={isCalculatingAi || isSolvedWon || isRepetitionDraw}
-                    className="p-2.5 rounded-xl bg-violet-950/50 hover:bg-violet-900/60 disabled:opacity-40 border border-violet-700/60 text-xs font-bold text-violet-200 flex flex-col items-center justify-center gap-1 transition cursor-pointer shadow-md"
-                    title="Xem gợi ý nước đi tối ưu"
-                  >
-                    <Lightbulb className={`w-4 h-4 text-violet-400 ${isCalculatingAi ? 'animate-spin' : ''}`} />
-                    <span>{isCalculatingAi ? 'Đang tính...' : 'Gợi ý AI'}</span>
-                  </button>
+                  {/* AI Hint Button (only when not in pure Ky Pho manual replay mode) */}
+                  {!isPlayingFromKyPho && (
+                    <button
+                      type="button"
+                      onClick={handleRequestHint}
+                      disabled={isCalculatingAi || isSolvedWon || isRepetitionDraw}
+                      className="p-2.5 rounded-xl bg-violet-950/50 hover:bg-violet-900/60 disabled:opacity-40 border border-violet-700/60 text-xs font-bold text-violet-200 flex flex-col items-center justify-center gap-1 transition cursor-pointer shadow-md"
+                      title="Xem gợi ý nước đi tối ưu"
+                    >
+                      <Lightbulb className={`w-4 h-4 text-violet-400 ${isCalculatingAi ? 'animate-spin' : ''}`} />
+                      <span>{isCalculatingAi ? 'Đang tính...' : 'Gợi ý AI'}</span>
+                    </button>
+                  )}
 
                   {/* Reset Puzzle Button */}
                   <button
                     type="button"
                     onClick={handleResetCurrentPuzzle}
                     className="p-2.5 rounded-xl bg-stone-950 hover:bg-stone-800 border border-stone-800 text-xs font-bold text-stone-200 flex flex-col items-center justify-center gap-1 transition cursor-pointer"
-                    title="Giải lại từ đầu thế cờ"
+                    title="Khôi phục lại từ nước bắt đầu"
                   >
                     <RotateCcw className="w-4 h-4 text-amber-400" />
-                    <span>Giải lại</span>
+                    <span>{isPlayingFromKyPho ? `Về nước #${kyPhoStepIndex + 1}` : 'Giải lại'}</span>
                   </button>
                 </div>
 
                 {/* AI Hint Details Box */}
-                {aiHint && (
+                {aiHint && !isPlayingFromKyPho && (
                   <div className="p-3 rounded-xl bg-violet-950/40 border border-violet-700/50 text-xs text-violet-200 space-y-1 animate-fadeIn">
                     <div className="font-black text-amber-300 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5" />
@@ -1617,13 +2003,15 @@ export const XiangqiSimulator: React.FC<XiangqiSimulatorProps> = ({ isOpen, onCl
                 {/* MOVE HISTORY LOG */}
                 <div>
                   <div className="flex items-center justify-between text-xs font-semibold text-stone-400 mb-1.5">
-                    <span>Lịch sử nước giải ({moveHistory.length})</span>
-                    {activePreset && <span className="text-amber-400">{activePreset.name}</span>}
+                    <span>Lịch sử nước đi ({moveHistory.length})</span>
+                    {activePreset && !isPlayingFromKyPho && (
+                      <span className="text-amber-400">{activePreset.name}</span>
+                    )}
                   </div>
-                  <div className="h-40 max-h-40 bg-stone-950 rounded-xl border border-stone-800 p-2 overflow-y-auto space-y-1 text-xs font-mono">
+                  <div className="h-44 max-h-44 bg-stone-950 rounded-xl border border-stone-800 p-2 overflow-y-auto space-y-1 text-xs font-mono">
                     {moveHistory.length === 0 ? (
                       <div className="h-full flex items-center justify-center text-stone-600 text-[11px] italic">
-                        Chưa có nước đi nào. Hãy bắt đầu giải!
+                        Chưa có nước đi nào. Hãy nhấp chọn quân trên bàn cờ để đi!
                       </div>
                     ) : (
                       moveHistory.map((mv, idx) => (

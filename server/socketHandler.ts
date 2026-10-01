@@ -13,7 +13,9 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       if (player.socketId) {
         const playerState = room.getPublicState(player.id);
         io.to(player.socketId).emit('ROOM_STATE', playerState);
-        io.to(player.socketId).emit('PLAYER_CARDS', room.getPlayerCards(player.id));
+        if (room.rule === 'TIEN_LEN_MIEN_NAM' || room.rule === 'SAM_LOC') {
+          io.to(player.socketId).emit('PLAYER_CARDS', room.getPlayerCards(player.id));
+        }
         if (room.rule === 'BAN_TAU') {
           io.to(player.socketId).emit('BAN_TAU_MY_SHIPS', room.getPlayerShips(player.id));
         }
@@ -157,6 +159,10 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         callback?.({ success: false, message: 'Phòng không tồn tại' });
         return;
       }
+      if (data?.playerId) {
+        room.markPlayerActive(data.playerId, socket.id);
+        socket.join(room.code);
+      }
       callback?.({ success: true, roomState: room.getPublicState(data.playerId) });
     });
 
@@ -211,10 +217,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           return;
         }
 
-        const requester = room.players.find((p) => p.id === data.requestedByPlayerId);
-        if (requester) {
-          requester.socketId = socket.id;
-          requester.disconnectedAt = null;
+        if (data.requestedByPlayerId) {
+          room.markPlayerActive(data.requestedByPlayerId, socket.id);
           socket.join(data.roomCode);
         }
 
@@ -238,6 +242,11 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           return;
         }
 
+        if (data.requestedByPlayerId) {
+          room.markPlayerActive(data.requestedByPlayerId, socket.id);
+          socket.join(data.roomCode);
+        }
+
         const resetRes = room.resetToWaiting(data.requestedByPlayerId);
         if (resetRes.success) {
           broadcastRoomUpdate(data.roomCode);
@@ -256,6 +265,11 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         if (!room) {
           callback?.({ success: false, message: 'Phòng không tồn tại' });
           return;
+        }
+
+        if (data.playerId) {
+          room.markPlayerActive(data.playerId, socket.id);
+          socket.join(data.roomCode);
         }
 
         const res = room.playerReturnToWaiting(data.playerId);
@@ -410,6 +424,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           callback?.({ success: false, message: 'Phòng không tồn tại' });
           return;
         }
+        room.markPlayerActive(data.playerId, socket.id);
+        socket.join(data.roomCode);
         const res = room.switchSeat(data.playerId, data.targetSeatIndex);
         if (res.success) {
           broadcastRoomUpdate(data.roomCode);
@@ -435,6 +451,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           callback?.({ success: false, message: 'Phòng không tồn tại' });
           return;
         }
+        room.markPlayerActive(data.playerId, socket.id);
+        socket.join(data.roomCode);
         const res = room.xiangqiMove(data.playerId, data.from, data.to);
         if (res.success) {
           broadcastRoomUpdate(data.roomCode);
@@ -450,6 +468,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         callback?.({ success: false, message: 'Phòng không tồn tại' });
         return;
       }
+      room.markPlayerActive(data.playerId, socket.id);
+      socket.join(data.roomCode);
       const res = room.xiangqiResign(data.playerId);
       if (res.success) {
         broadcastRoomUpdate(data.roomCode);
@@ -464,6 +484,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         callback?.({ success: false, message: 'Phòng không tồn tại' });
         return;
       }
+      room.markPlayerActive(data.playerId, socket.id);
+      socket.join(data.roomCode);
       const res = room.xiangqiOfferDraw(data.playerId);
       if (res.success) {
         broadcastRoomUpdate(data.roomCode);
@@ -480,6 +502,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           callback?.({ success: false, message: 'Phòng không tồn tại' });
           return;
         }
+        room.markPlayerActive(data.playerId, socket.id);
+        socket.join(data.roomCode);
         const res = room.xiangqiRespondDraw(data.playerId, data.accept);
         if (res.success) {
           broadcastRoomUpdate(data.roomCode);
@@ -736,6 +760,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
       const code = (data.roomCode || '').toUpperCase().trim();
       const room = roomManager.getRoom(code);
       if (room && data.text?.trim()) {
+        room.markPlayerActive(data.playerId, socket.id);
         socket.join(code);
         room.addChatMessage(data.playerId, data.text.trim());
         broadcastRoomUpdate(code);
@@ -750,16 +775,13 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
     // 11. Ngắt kết nối socket
     socket.on('disconnect', () => {
       let foundRoomCode: string | null = null;
-      const rooms = roomManager.getOpenRoomsList();
-      for (const r of rooms) {
-        const room = roomManager.getRoom(r.code);
-        if (room) {
-          const p = room.players.find((player) => player.socketId === socket.id);
-          if (p) {
-            foundRoomCode = room.code;
-            room.handleDisconnect(socket.id);
-            break;
-          }
+      const allRooms = roomManager.getAllRooms();
+      for (const room of allRooms) {
+        const p = room.players.find((player) => player.socketId === socket.id);
+        if (p) {
+          foundRoomCode = room.code;
+          room.handleDisconnect(socket.id);
+          break;
         }
       }
 

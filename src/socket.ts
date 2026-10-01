@@ -11,6 +11,11 @@ export interface PlayerProfile {
 export const socket: Socket = io(typeof window !== 'undefined' ? window.location.origin : '', {
   transports: ['websocket', 'polling'],
   autoConnect: true,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 500,
+  reconnectionDelayMax: 3000,
+  timeout: 20000,
 });
 
 const PROFILE_KEY = 'winner88_player_profile';

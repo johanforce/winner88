@@ -332,7 +332,7 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                   </div>
                 </div>
                 <div className="bg-stone-950/50 p-2.5 rounded-lg border border-stone-800 text-xs">
-                  <strong className="text-rose-400">Binh / Tốt (兵 / 卒):</strong> Chưa qua sông chỉ đi thẳng 1 bước; sau khi qua sông có thể đi thẳng hoặc đi ngang 1 bước. Không bao giờ được đi lùi!
+                  <strong className="text-rose-400">Tốt (兵 / 卒):</strong> Chưa qua sông chỉ đi thẳng 1 bước; sau khi qua sông có thể đi thẳng hoặc đi ngang 1 bước. Không bao giờ được đi lùi!
                 </div>
               </div>
 

@@ -346,14 +346,14 @@ export function hasAnyLegalMoves(color: XiangqiSide, pieces: XiangqiPiece[]): bo
 }
 
 // Translate piece type to Vietnamese name
-export function getPieceNameVN(type: XiangqiPieceType, color: XiangqiSide): string {
+export function getPieceNameVN(type: XiangqiPieceType, _color?: XiangqiSide): string {
   switch (type) {
     case 'GENERAL':
-      return color === 'RED' ? 'Tướng' : 'Tướng';
+      return 'Tướng';
     case 'ADVISOR':
-      return color === 'RED' ? 'Sĩ' : 'Sĩ';
+      return 'Sĩ';
     case 'ELEPHANT':
-      return color === 'RED' ? 'Tượng' : 'Tượng';
+      return 'Tượng';
     case 'HORSE':
       return 'Mã';
     case 'CHARIOT':
@@ -361,30 +361,64 @@ export function getPieceNameVN(type: XiangqiPieceType, color: XiangqiSide): stri
     case 'CANNON':
       return 'Pháo';
     case 'SOLDIER':
-      return color === 'RED' ? 'Binh' : 'Tốt';
+      return 'Tốt';
   }
 }
 
-// Generate friendly Vietnamese notation for a move
+// Tính số lộ (1..9 từ phải sang trái theo góc nhìn của mỗi bên)
+export function getPieceFileNumber(x: number, color: XiangqiSide): number {
+  return color === 'RED' ? 9 - x : x + 1;
+}
+
+// Generate standard Vietnamese Xiangqi notation (Kỳ phổ Cờ Tướng chuẩn)
 export function generateMoveNotation(
   piece: XiangqiPiece,
   to: { x: number; y: number },
-  capturedPiece?: XiangqiPiece
+  capturedPiece?: XiangqiPiece,
+  allPieces?: XiangqiPiece[]
 ): string {
   const name = getPieceNameVN(piece.type, piece.color);
-  const fromCoord = `${piece.x + 1}`;
-  const toCoord = `${to.x + 1}`;
-  
-  let action = '';
-  if (piece.y === to.y) {
-    action = `bình ${toCoord}`;
-  } else if (piece.color === 'RED') {
-    action = to.y < piece.y ? `tiến ${Math.abs(piece.y - to.y)}` : `thoái ${Math.abs(piece.y - to.y)}`;
-  } else {
-    action = to.y > piece.y ? `tiến ${Math.abs(piece.y - to.y)}` : `thoái ${Math.abs(piece.y - to.y)}`;
+  const fromCol = getPieceFileNumber(piece.x, piece.color);
+  const toCol = getPieceFileNumber(to.x, piece.color);
+
+  // Kiểm tra nếu có >= 2 quân cùng loại, cùng màu nằm trên cùng 1 cột dọc (lộ)
+  let prefixPos = '';
+  if (allPieces) {
+    const sameFilePieces = allPieces.filter(
+      (p) => p.color === piece.color && p.type === piece.type && p.x === piece.x
+    );
+    if (sameFilePieces.length >= 2) {
+      // Sắp xếp từ trước về sau theo hướng tiến quân của từng bên
+      const sorted = [...sameFilePieces].sort((a, b) =>
+        piece.color === 'RED' ? a.y - b.y : b.y - a.y
+      );
+      const idx = sorted.findIndex((p) => p.id === piece.id || (p.x === piece.x && p.y === piece.y));
+      if (idx === 0) {
+        prefixPos = ' trước';
+      } else if (idx === sorted.length - 1) {
+        prefixPos = ' sau';
+      } else {
+        prefixPos = ' giữa';
+      }
+    }
   }
 
-  let text = `${name} ${fromCoord} ${action}`;
+  const isDiagonalPiece =
+    piece.type === 'HORSE' || piece.type === 'ELEPHANT' || piece.type === 'ADVISOR';
+  const dy = Math.abs(piece.y - to.y);
+
+  let action = '';
+  if (piece.y === to.y) {
+    action = `bình ${toCol}`;
+  } else {
+    const isForward = piece.color === 'RED' ? to.y < piece.y : to.y > piece.y;
+    const dirWord = isForward ? 'tiến' : 'thoái';
+    // Quân đi chéo (Mã, Tượng, Sĩ): ghi lộ đích; Quân đi thẳng (Tướng, Xe, Pháo, Tốt): ghi số bước dọc
+    const targetVal = isDiagonalPiece ? toCol : dy;
+    action = `${dirWord} ${targetVal}`;
+  }
+
+  let text = `${name}${prefixPos} ${fromCol} ${action}`;
   if (capturedPiece) {
     text += ` (ăn ${getPieceNameVN(capturedPiece.type, capturedPiece.color)})`;
   }
@@ -394,7 +428,7 @@ export function generateMoveNotation(
 // Tạo mã hash duy nhất cho thế cờ hiện tại
 export function getBoardPositionKey(pieces: XiangqiPiece[], turnSide: XiangqiSide): string {
   const piecesKey = pieces
-    .map((p) => `${p.color[0]}${p.type[0]}${p.x}${p.y}`)
+    .map((p) => `${p.color[0]}${p.type.slice(0, 2)}${p.x}${p.y}`)
     .sort()
     .join('');
   return `${piecesKey}_${turnSide}`;

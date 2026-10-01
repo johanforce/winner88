@@ -43,7 +43,7 @@ export function findBestXiangqiMove(
       }
       // Prioritize advancing pieces toward center
       score += Math.abs(move.x - 4) * -2;
-      const notation = generateMoveNotation(piece, move, targetPiece);
+      const notation = generateMoveNotation(piece, move, targetPiece, pieces);
       candidates.push({
         piece,
         from: { x: piece.x, y: piece.y },
