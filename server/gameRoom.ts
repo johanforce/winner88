@@ -43,6 +43,8 @@ import {
   hasAnyLegalMoves,
   isSideInCheck,
   generateMoveNotation,
+  getBoardPositionKey,
+  checkRepetitiveMovesDraw,
 } from './xiangqiLogic';
 import {
   createEmptyCaroBoard,
@@ -92,6 +94,7 @@ export class GameRoom {
   public chatMessages: ChatMessage[] = [];
   public samLocState?: SamLocState;
   public xiangqiState?: XiangqiState;
+  public xiangqiPositionHistory: string[] = [];
   public caroState?: CaroState;
   public banTauState?: BanTauState;
   public coCaNguaState?: CoCaNguaState;
@@ -735,6 +738,8 @@ export class GameRoom {
         winReason: undefined,
         drawOfferFrom: null,
       };
+
+      this.xiangqiPositionHistory = [getBoardPositionKey(this.xiangqiState.pieces, 'RED')];
 
       this.currentTurnPlayerId = redPlayer.id;
 
@@ -1658,6 +1663,21 @@ export class GameRoom {
     this.xiangqiState.lastMove = moveRecord;
     this.xiangqiState.moveHistory.push(moveRecord);
     this.xiangqiState.drawOfferFrom = null;
+
+    const nextPosKey = getBoardPositionKey(nextPieces, oppSide);
+    this.xiangqiPositionHistory.push(nextPosKey);
+
+    // Kiểm tra luật: 2 bên đi lại nước đi quá 3 lần liên tục là hòa
+    const repCheck = checkRepetitiveMovesDraw(this.xiangqiState.moveHistory, this.xiangqiPositionHistory);
+    if (repCheck.isDraw) {
+      this.stopTimer();
+      this.xiangqiState.winnerSide = 'DRAW';
+      this.xiangqiState.winReason = 'REPETITION';
+      this.status = 'FINISHED';
+      this.addSystemChat('🤝 HÒA CỜ! Hai bên đi lại nước đi quá 3 lần liên tục theo luật Cờ Tướng!');
+      this.onStateChange();
+      return { success: true };
+    }
 
     if (currentSide === 'RED') {
       this.xiangqiState.redTimeRemaining += this.xiangqiState.incrementSeconds;

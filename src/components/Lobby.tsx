@@ -15,6 +15,7 @@ import {
 import { GameRule, RoomListItem, XiangqiTimeMode } from '../types';
 import { socket } from '../socket';
 import { RuleGuideModal } from './RuleGuideModal';
+import { XiangqiSimulator } from './XiangqiSimulator';
 
 interface LobbyProps {
   playerName: string;
@@ -44,6 +45,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   const [selectedRule, setSelectedRule] = useState<GameRule>('TIEN_LEN_MIEN_NAM');
   const [selectedTimeMode, setSelectedTimeMode] = useState<XiangqiTimeMode>('STANDARD');
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const feedbackTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -150,6 +152,16 @@ export const Lobby: React.FC<LobbyProps> = ({
 
         {/* User profile capsule & rule button */}
         <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => setIsSimulatorOpen(true)}
+            id="btn-open-simulator-lobby"
+            className="p-2 sm:px-3 sm:py-1.5 bg-gradient-to-r from-amber-600/30 to-amber-500/20 hover:from-amber-600/40 hover:to-amber-500/30 border border-amber-500/50 rounded-xl text-xs font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition touch-manipulation cursor-pointer shadow-sm"
+            title="Cờ Thế & Simulator (Tự xếp cờ & giải)"
+          >
+            <span className="text-sm">🧩</span>
+            <span className="hidden sm:inline">Cờ Thế (Simulator)</span>
+          </button>
+
           <button
             onClick={() => setIsRuleModalOpen(true)}
             id="btn-rules-lobby"
@@ -676,6 +688,17 @@ export const Lobby: React.FC<LobbyProps> = ({
                       </div>
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreateModalOpen(false);
+                      setIsSimulatorOpen(true);
+                    }}
+                    className="mt-3 w-full p-2.5 rounded-xl border border-amber-500/40 bg-amber-950/40 hover:bg-amber-900/50 text-amber-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                  >
+                    <span>🧩 Hoặc mở Chế Độ Cờ Thế (Simulator) - Tự xếp cờ & giải</span>
+                  </button>
                 </div>
               )}
 
@@ -720,6 +743,12 @@ export const Lobby: React.FC<LobbyProps> = ({
         isOpen={isRuleModalOpen}
         onClose={() => setIsRuleModalOpen(false)}
         defaultRule={filterRule === 'SAM_LOC' ? 'SAM_LOC' : 'TIEN_LEN_MIEN_NAM'}
+      />
+
+      {/* Xiangqi Simulator Modal */}
+      <XiangqiSimulator
+        isOpen={isSimulatorOpen}
+        onClose={() => setIsSimulatorOpen(false)}
       />
     </div>
   );

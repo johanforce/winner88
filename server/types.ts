@@ -242,7 +242,7 @@ export interface XiangqiState {
   isCheck: boolean;
   checkSide: XiangqiSide | null;
   winnerSide: XiangqiSide | 'DRAW' | null;
-  winReason?: 'CHECKMATE' | 'TIMEOUT' | 'RESIGN' | 'STALEMATE' | 'AGREED_DRAW';
+  winReason?: 'CHECKMATE' | 'TIMEOUT' | 'RESIGN' | 'STALEMATE' | 'AGREED_DRAW' | 'REPETITION';
   drawOfferFrom?: XiangqiSide | null;
 }
 

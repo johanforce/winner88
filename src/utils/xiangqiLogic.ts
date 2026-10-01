@@ -399,3 +399,69 @@ export function generateMoveNotation(
   }
   return text;
 }
+
+// Tạo mã hash duy nhất cho thế cờ hiện tại
+export function getBoardPositionKey(pieces: XiangqiPiece[], turnSide: XiangqiSide): string {
+  const piecesKey = pieces
+    .map((p) => `${p.color[0]}${p.type[0]}${p.x}${p.y}`)
+    .sort()
+    .join('');
+  return `${piecesKey}_${turnSide}`;
+}
+
+/**
+ * Kiểm tra luật: 2 bên đi lại nước đi quá 3 lần liên tục là hòa
+ * (Lặp lại thế cờ quá 3 lần liên tục hoặc lặp lại chu kỳ nước đi qua lại quá 3 lần liên tục)
+ */
+export function checkRepetitiveMovesDraw(
+  moves: XiangqiMove[],
+  positionHistory: string[]
+): { isDraw: boolean; reason?: string } {
+  // 1. Kiểm tra thế cờ lặp lại quá 3 lần (xuất hiện lần thứ 4 trở lên)
+  if (positionHistory.length > 0) {
+    const latestPos = positionHistory[positionHistory.length - 1];
+    let occurrences = 0;
+    for (const pos of positionHistory) {
+      if (pos === latestPos) occurrences++;
+    }
+    if (occurrences >= 4) {
+      return {
+        isDraw: true,
+        reason: 'Thế cờ đã lặp lại quá 3 lần liên tục (Hòa theo luật lặp thế cờ).',
+      };
+    }
+  }
+
+  // 2. Kiểm tra chuỗi nước đi lặp lại tuần hoàn qua lại giữa 2 bên (chu kỳ K = 2, 4, 6 nước)
+  // Quá 3 lần liên tục = 4 chu kỳ lặp lại liên tiếp
+  const candidatePeriods = [2, 4, 6];
+  for (const K of candidatePeriods) {
+    if (moves.length >= 4 * K) {
+      let isRepeating = true;
+      for (let i = 0; i < 3 * K; i++) {
+        const curMove = moves[moves.length - 1 - i];
+        const prevCycleMove = moves[moves.length - 1 - i - K];
+        if (
+          curMove.from.x !== prevCycleMove.from.x ||
+          curMove.from.y !== prevCycleMove.from.y ||
+          curMove.to.x !== prevCycleMove.to.x ||
+          curMove.to.y !== prevCycleMove.to.y ||
+          curMove.piece.type !== prevCycleMove.piece.type ||
+          curMove.piece.color !== prevCycleMove.piece.color
+        ) {
+          isRepeating = false;
+          break;
+        }
+      }
+      if (isRepeating) {
+        return {
+          isDraw: true,
+          reason: 'Hai bên đi lại nước đi lặp lại quá 3 lần liên tục.',
+        };
+      }
+    }
+  }
+
+  return { isDraw: false };
+}
+

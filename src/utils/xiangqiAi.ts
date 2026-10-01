@@ -1,5 +1,5 @@
 import { XiangqiPiece, XiangqiSide } from '../types';
-import { getLegalMoves, generateMoveNotation } from '../../server/xiangqiLogic';
+import { getLegalMoves, generateMoveNotation } from './xiangqiLogic';
 
 export interface XiangqiAiHint {
   piece: XiangqiPiece;

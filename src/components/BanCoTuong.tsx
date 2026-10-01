@@ -40,6 +40,7 @@ import {
 import { socket } from '../socket';
 import { KhungChat } from './KhungChat';
 import { RuleGuideModal } from './RuleGuideModal';
+import { XiangqiSimulator } from './XiangqiSimulator';
 import {
   getPieceAt,
   getLegalMoves,
@@ -83,6 +84,7 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
 
   // Interactive piece selection & legal moves
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
+  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'MOVES' | 'SPECTATORS' | 'CHAT'>('MOVES');
@@ -381,6 +383,17 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => setIsSimulatorOpen(true)}
+            id="btn-open-xiangqi-simulator"
+            className="px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md shadow-amber-950/40 transition cursor-pointer touch-manipulation"
+            title="Cờ Thế & Simulator: Tự xếp cờ thế để giải"
+          >
+            <span className="text-sm">🧩</span>
+            <span className="hidden xs:inline">Cờ Thế (Simulator)</span>
+          </button>
+
           <button
             type="button"
             onClick={() => {
@@ -1526,6 +1539,8 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                     ? 'Đối thủ xin đầu hàng'
                     : xiangqi.winReason === 'STALEMATE'
                     ? 'Hết nước đi hợp lệ (Stalemate)'
+                    : xiangqi.winReason === 'REPETITION'
+                    ? 'Hai bên đi lại nước đi quá 3 lần liên tục (Hòa theo luật lặp thế cờ)'
                     : 'Hai bên thuận hòa'}
                 </strong>
               </div>
@@ -1627,6 +1642,12 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
         isOpen={isRuleModalOpen}
         onClose={() => setIsRuleModalOpen(false)}
         defaultRule="CO_TUONG"
+      />
+
+      {/* Cờ Thế Simulator Modal */}
+      <XiangqiSimulator
+        isOpen={isSimulatorOpen}
+        onClose={() => setIsSimulatorOpen(false)}
       />
 
       {/* Discreet AI Activation Toast Notification */}
