@@ -4,11 +4,13 @@ import { GameRule, RoomListItem, XiangqiTimeMode } from './types';
 export class RoomManager {
   private rooms: Map<string, GameRoom> = new Map();
   private playerRoomMap: Map<string, string> = new Map(); // playerId -> roomCode
+  private last22hCleanupDate: string = '';
 
   constructor() {
     // Cleanup empty rooms periodically
     setInterval(() => {
       this.cleanupStaleRooms();
+      this.check22hDailyCleanup();
     }, 30000);
   }
 
@@ -85,6 +87,34 @@ export class RoomManager {
       room.cleanup();
       room.players.forEach((p) => this.playerRoomMap.delete(p.id));
       this.rooms.delete(code);
+    }
+  }
+
+  public cleanupNonPlayingRooms(reason: string = '22:00 Daily Cleanup'): number {
+    const codesToDelete: string[] = [];
+    this.rooms.forEach((room, code) => {
+      if (room.status !== 'PLAYING') {
+        codesToDelete.push(code);
+      }
+    });
+
+    codesToDelete.forEach((code) => {
+      this.deleteRoom(code);
+    });
+
+    console.log(`[RoomManager] Cleaned up ${codesToDelete.length} non-playing rooms. Reason: ${reason}`);
+    return codesToDelete.length;
+  }
+
+  private check22hDailyCleanup() {
+    const now = new Date();
+    // UTC+7 (Vietnam Time)
+    const vnHour = (now.getUTCHours() + 7) % 24;
+    const vnDayKey = `${now.getUTCFullYear()}-${now.getUTCMonth()}-${now.getUTCDate()}-${vnHour}`;
+
+    if (vnHour === 22 && this.last22hCleanupDate !== vnDayKey) {
+      this.last22hCleanupDate = vnDayKey;
+      this.cleanupNonPlayingRooms('Tự động xóa phòng không trong trận lúc 22:00 hàng ngày');
     }
   }
 

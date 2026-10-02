@@ -46,6 +46,7 @@ import {
   getBoardPositionKey,
   checkRepetitiveMovesDraw,
 } from './xiangqiLogic';
+import { recordRankedMatchResult } from '../src/firebase';
 import {
   createEmptyCaroBoard,
   isInsideBoard,
@@ -99,7 +100,7 @@ export class GameRoom {
   public banTauState?: BanTauState;
   public coCaNguaState?: CoCaNguaState;
   public chessState?: ChessState;
-  public xiangqiTimeMode: XiangqiTimeMode = 'STANDARD';
+  public xiangqiTimeMode: XiangqiTimeMode = 'RANKED';
 
   private timerInterval: NodeJS.Timeout | null = null;
   private disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
@@ -110,7 +111,7 @@ export class GameRoom {
     code: string,
     rule: GameRule,
     onStateChange: () => void,
-    xiangqiTimeMode: XiangqiTimeMode = 'STANDARD',
+    xiangqiTimeMode: XiangqiTimeMode = 'RANKED',
     onPlayerRemoved?: (playerId: string, isEmpty: boolean) => void
   ) {
     this.code = code;
@@ -118,6 +119,10 @@ export class GameRoom {
     this.onStateChange = onStateChange;
     this.xiangqiTimeMode = xiangqiTimeMode;
     this.onPlayerRemoved = onPlayerRemoved;
+  }
+
+  public triggerStateChange() {
+    this.onStateChange();
   }
 
   public setXiangqiTimeMode(
@@ -149,14 +154,40 @@ export class GameRoom {
     name: string,
     avatar: string,
     reconnectToken: string,
-    initialScore?: number
+    initialScore?: number,
+    competitionAccount?: { username: string; displayName: string; elo: number }
   ): { success: boolean; message?: string } {
+    // If it's a ranked room, check competition account
+    if (this.rule === 'CO_TUONG' && this.xiangqiTimeMode === 'RANKED') {
+      if (!competitionAccount || !competitionAccount.username) {
+        return { success: false, message: 'Phòng cờ tướng xếp hạng yêu cầu đăng nhập tài khoản thi đấu!' };
+      }
+    }
+
+    // Không cho phép cùng 1 tài khoản thi đấu vào phòng 2 lần (ngăn tạo 2 tab tự đánh)
+    if (competitionAccount?.username) {
+      const duplicatePlayer = this.players.find(
+        (p) => p.competitionUsername === competitionAccount.username && p.id !== id
+      );
+      if (duplicatePlayer) {
+        return {
+          success: false,
+          message: `Tài khoản thi đấu "${competitionAccount.username}" đã có người đăng nhập trong phòng này! Mỗi tài khoản chỉ được chơi tại một nơi.`,
+        };
+      }
+    }
+
     // Check if player is reconnecting
     const existingPlayer = this.players.find((p) => p.id === id);
     if (existingPlayer) {
       this.markPlayerActive(id, socketId);
       existingPlayer.name = name;
       existingPlayer.avatar = avatar;
+      if (competitionAccount) {
+        existingPlayer.competitionUsername = competitionAccount.username;
+        existingPlayer.competitionDisplayName = competitionAccount.displayName;
+        existingPlayer.competitionElo = competitionAccount.elo;
+      }
 
       this.onStateChange();
       return { success: true };
@@ -210,6 +241,9 @@ export class GameRoom {
           score: startScore,
           isSpectator: true,
           returnedToWaiting: false,
+          competitionUsername: competitionAccount?.username,
+          competitionDisplayName: competitionAccount?.displayName,
+          competitionElo: competitionAccount?.elo,
         };
 
         this.players.push(newSpectator);
@@ -325,6 +359,9 @@ export class GameRoom {
       caroPiece,
       chessSide,
       returnedToWaiting: false,
+      competitionUsername: competitionAccount?.username,
+      competitionDisplayName: competitionAccount?.displayName,
+      competitionElo: competitionAccount?.elo,
     };
 
     this.players.push(newPlayer);
@@ -738,7 +775,18 @@ export class GameRoom {
       if (!redPlayer || !blackPlayer) {
         return {
           success: false,
-          message: 'Cần đủ 2 kỳ thủ ở vị trí Đỏ (ghế 1) và Đen (ghế 2) để bắt đầu trận cờ chớp!',
+          message: 'Cần đủ 2 kỳ thủ ở vị trí Đỏ (ghế 1) và Đen (ghế 2) để bắt đầu trận cờ!',
+        };
+      }
+
+      if (
+        redPlayer.competitionUsername &&
+        blackPlayer.competitionUsername &&
+        redPlayer.competitionUsername.toLowerCase() === blackPlayer.competitionUsername.toLowerCase()
+      ) {
+        return {
+          success: false,
+          message: 'Không thể bắt đầu trận đấu! Hai ghế không được sử dụng cùng 1 tài khoản thi đấu.',
         };
       }
 
@@ -747,8 +795,16 @@ export class GameRoom {
       this.results = undefined;
 
       const isStandard = this.xiangqiTimeMode === 'STANDARD';
-      const initialSeconds = isStandard ? 3600 : 300;
-      const incrementSeconds = isStandard ? 30 : 3;
+      const isRanked = this.xiangqiTimeMode === 'RANKED' || !this.xiangqiTimeMode;
+      let initialSeconds = 1800; // 30 mins (Ranked)
+      let incrementSeconds = 0; // No increment
+      if (isStandard) {
+        initialSeconds = 3600;
+        incrementSeconds = 30;
+      } else if (this.xiangqiTimeMode === 'BLITZ_5M') {
+        initialSeconds = 300;
+        incrementSeconds = 3;
+      }
 
       this.xiangqiState = {
         pieces: createInitialXiangqiPieces(),
@@ -759,7 +815,7 @@ export class GameRoom {
         redTimeRemaining: initialSeconds,
         blackTimeRemaining: initialSeconds,
         initialBlitzTime: initialSeconds,
-        timeMode: this.xiangqiTimeMode,
+        timeMode: isRanked ? 'RANKED' : this.xiangqiTimeMode,
         incrementSeconds,
         lastMove: null,
         moveHistory: [],
@@ -768,23 +824,34 @@ export class GameRoom {
         winnerSide: null,
         winReason: undefined,
         drawOfferFrom: null,
+        moveTimeRemaining: isRanked ? 120 : undefined,
+        redUsername: redPlayer.competitionUsername,
+        blackUsername: blackPlayer.competitionUsername,
+        redElo: redPlayer.competitionElo,
+        blackElo: blackPlayer.competitionElo,
       };
 
       this.xiangqiPositionHistory = [getBoardPositionKey(this.xiangqiState.pieces, 'RED')];
 
       this.currentTurnPlayerId = redPlayer.id;
+      this.turnTimeRemaining = isRanked ? 120 : (isStandard ? 3600 : (this.xiangqiTimeMode === 'BLITZ_5M' ? 300 : 1800));
 
       this.players.forEach((p) => {
         p.status = 'PLAYING';
         p.returnedToWaiting = false;
       });
 
-      const modeTitle = isStandard
+      const modeTitle = isRanked
+        ? '🏆 CỜ TƯỚNG XẾP HẠNG (30 phút không cộng thêm, 2 phút/nước đi)'
+        : isStandard
         ? '🏆 CỜ TIÊU CHUẨN QUỐC TẾ (60 phút + 30s/nước WXF)'
         : '⚡ CỜ CHỚP 5 PHÚT (+ 3s/nước)';
 
+      const redAccLabel = redPlayer.competitionUsername ? ` [Elo: ${redPlayer.competitionElo ?? 1300}]` : '';
+      const blackAccLabel = blackPlayer.competitionUsername ? ` [Elo: ${blackPlayer.competitionElo ?? 1300}]` : '';
+
       this.addSystemChat(
-        `${modeTitle} chính thức bắt đầu! Đỏ (${redPlayer.name}) vs Đen (${blackPlayer.name}).`
+        `${modeTitle} chính thức bắt đầu! Đỏ (${redPlayer.name}${redAccLabel}) vs Đen (${blackPlayer.name}${blackAccLabel}).`
       );
 
       this.startXiangqiBlitzTimer();
@@ -1579,30 +1646,49 @@ export class GameRoom {
         return;
       }
 
+      const isRanked = this.xiangqiState.timeMode === 'RANKED';
+
       if (this.xiangqiState.currentSide === 'RED') {
         this.xiangqiState.redTimeRemaining -= 1;
         if (this.xiangqiState.redTimeRemaining <= 0) {
           this.xiangqiState.redTimeRemaining = 0;
-          this.handleXiangqiTimeout('RED');
+          this.handleXiangqiTimeout('RED', 'Hết 30 phút tổng thời gian');
+          return;
         }
       } else {
         this.xiangqiState.blackTimeRemaining -= 1;
         if (this.xiangqiState.blackTimeRemaining <= 0) {
           this.xiangqiState.blackTimeRemaining = 0;
-          this.handleXiangqiTimeout('BLACK');
+          this.handleXiangqiTimeout('BLACK', 'Hết 30 phút tổng thời gian');
+          return;
         }
       }
 
-      this.turnTimeRemaining =
-        this.xiangqiState.currentSide === 'RED'
-          ? this.xiangqiState.redTimeRemaining
-          : this.xiangqiState.blackTimeRemaining;
+      if (isRanked) {
+        if (typeof this.xiangqiState.moveTimeRemaining !== 'number') {
+          this.xiangqiState.moveTimeRemaining = 120;
+        }
+        this.xiangqiState.moveTimeRemaining -= 1;
+        this.turnTimeRemaining = Math.max(0, this.xiangqiState.moveTimeRemaining);
+        if (this.xiangqiState.moveTimeRemaining <= 0) {
+          this.handleXiangqiTimeout(
+            this.xiangqiState.currentSide,
+            'Quá 2 phút suy nghĩ cho một nước đi'
+          );
+          return;
+        }
+      } else {
+        this.turnTimeRemaining =
+          this.xiangqiState.currentSide === 'RED'
+            ? this.xiangqiState.redTimeRemaining
+            : this.xiangqiState.blackTimeRemaining;
+      }
 
       this.onStateChange();
     }, 1000);
   }
 
-  private handleXiangqiTimeout(loserSide: XiangqiSide) {
+  private handleXiangqiTimeout(loserSide: XiangqiSide, detailReason?: string) {
     this.stopTimer();
     if (!this.xiangqiState) return;
 
@@ -1623,13 +1709,71 @@ export class GameRoom {
     if (winner && loser) {
       winner.score += winCoins;
       loser.score = Math.max(0, loser.score - winCoins);
-      const modeLabel = this.xiangqiState.timeMode === 'STANDARD' ? '60 phút' : '5 phút';
+      const detailStr = detailReason ? ` (${detailReason})` : '';
       this.addSystemChat(
-        `⏱️ HẾT GIỜ! Kỳ thủ ${loser.name} (${loserSide === 'RED' ? 'Đỏ' : 'Đen'}) đã hết ${modeLabel} suy nghĩ. ${winner.name} (${winnerSide === 'RED' ? 'Đỏ' : 'Đen'}) THẮNG (+${winCoins} xu)!`
+        `⏱️ HẾT GIỜ${detailStr}! Kỳ thủ ${loser.name} (${loserSide === 'RED' ? 'Đỏ' : 'Đen'}) bị xử THUA. ${winner.name} (${winnerSide === 'RED' ? 'Đỏ' : 'Đen'}) THẮNG (+${winCoins} xu)!`
       );
     }
 
+    this.handleRankedMatchCompletion();
     this.onStateChange();
+  }
+
+  private async handleRankedMatchCompletion() {
+    if (this.rule !== 'CO_TUONG' || this.xiangqiTimeMode !== 'RANKED' || !this.xiangqiState) {
+      return;
+    }
+
+    const redPlayer = this.players.find((p) => p.id === this.xiangqiState?.redPlayerId);
+    const blackPlayer = this.players.find((p) => p.id === this.xiangqiState?.blackPlayerId);
+
+    const redUsername = redPlayer?.competitionUsername || this.xiangqiState.redUsername;
+    const blackUsername = blackPlayer?.competitionUsername || this.xiangqiState.blackUsername;
+
+    if (!redUsername || !blackUsername) {
+      return;
+    }
+
+    const winnerSide = this.xiangqiState.winnerSide;
+    const winReason = this.xiangqiState.winReason || 'CHECKMATE';
+    if (!winnerSide) return;
+
+    try {
+      const matchDoc = await recordRankedMatchResult({
+        roomCode: this.code,
+        redUsername,
+        redPlayerName: redPlayer?.name || redUsername,
+        blackUsername,
+        blackPlayerName: blackPlayer?.name || blackUsername,
+        winnerSide,
+        winReason,
+        movesCount: this.xiangqiState.moveHistory.length,
+        durationSeconds: Math.max(
+          1,
+          Math.round(1800 - (this.xiangqiState.redTimeRemaining + this.xiangqiState.blackTimeRemaining) / 2)
+        ),
+      });
+
+      if (redPlayer) {
+        redPlayer.competitionElo = matchDoc.redEloAfter;
+      }
+      if (blackPlayer) {
+        blackPlayer.competitionElo = matchDoc.blackEloAfter;
+      }
+      this.xiangqiState.redElo = matchDoc.redEloAfter;
+      this.xiangqiState.blackElo = matchDoc.blackEloAfter;
+
+      const redDeltaStr = matchDoc.redEloDelta >= 0 ? `+${matchDoc.redEloDelta}` : `${matchDoc.redEloDelta}`;
+      const blackDeltaStr = matchDoc.blackEloDelta >= 0 ? `+${matchDoc.blackEloDelta}` : `${matchDoc.blackEloDelta}`;
+
+      this.addSystemChat(
+        `🏆 [XẾP HẠNG CỜ TƯỚNG] Cập nhật Elo: ${matchDoc.redPlayerName} (${matchDoc.redEloBefore} → ${matchDoc.redEloAfter} [${redDeltaStr}]) ⚔️ ${matchDoc.blackPlayerName} (${matchDoc.blackEloBefore} → ${matchDoc.blackEloAfter} [${blackDeltaStr}])`
+      );
+
+      this.onStateChange();
+    } catch (err) {
+      console.error('[handleRankedMatchCompletion] Error updating Elo & history:', err);
+    }
   }
 
   public xiangqiMove(
@@ -1707,14 +1851,20 @@ export class GameRoom {
       this.xiangqiState.winReason = 'REPETITION';
       this.status = 'FINISHED';
       this.addSystemChat('🤝 HÒA CỜ! Hai bên đi lại nước đi quá 3 lần liên tục theo luật Cờ Tướng!');
+      this.handleRankedMatchCompletion();
       this.onStateChange();
       return { success: true };
     }
 
-    if (currentSide === 'RED') {
-      this.xiangqiState.redTimeRemaining += this.xiangqiState.incrementSeconds;
+    if (this.xiangqiState.timeMode === 'RANKED') {
+      this.xiangqiState.moveTimeRemaining = 120;
+      this.turnTimeRemaining = 120;
     } else {
-      this.xiangqiState.blackTimeRemaining += this.xiangqiState.incrementSeconds;
+      if (currentSide === 'RED') {
+        this.xiangqiState.redTimeRemaining += this.xiangqiState.incrementSeconds;
+      } else {
+        this.xiangqiState.blackTimeRemaining += this.xiangqiState.incrementSeconds;
+      }
     }
 
     const oppHasLegalMoves = hasAnyLegalMoves(oppSide, nextPieces);
@@ -1739,6 +1889,7 @@ export class GameRoom {
         );
       }
 
+      this.handleRankedMatchCompletion();
       this.onStateChange();
       return { success: true };
     }
@@ -1790,6 +1941,7 @@ export class GameRoom {
       );
     }
 
+    this.handleRankedMatchCompletion();
     this.onStateChange();
     return { success: true };
   }
@@ -1838,6 +1990,7 @@ export class GameRoom {
       const redP = this.players.find((p) => p.id === this.xiangqiState?.redPlayerId);
       const blackP = this.players.find((p) => p.id === this.xiangqiState?.blackPlayerId);
       this.addSystemChat(`🤝 Kỳ thủ ${responder?.name} đã ĐỒNG Ý hòa cờ! Trận đấu kết thúc HÒA.`);
+      this.handleRankedMatchCompletion();
     } else {
       this.addSystemChat(`❌ Kỳ thủ ${responder?.name} đã TỪ CHỐI lời xin hòa. Trận đấu tiếp tục!`);
       this.xiangqiState.drawOfferFrom = null;
@@ -2747,6 +2900,9 @@ export class GameRoom {
       fleetPlaced: p.fleetPlaced,
       caNguaColor: p.caNguaColor,
       returnedToWaiting: p.returnedToWaiting,
+      competitionUsername: p.competitionUsername,
+      competitionDisplayName: p.competitionDisplayName,
+      competitionElo: p.competitionElo,
     }));
 
     return {

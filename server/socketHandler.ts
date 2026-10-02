@@ -44,6 +44,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         reconnectToken: string;
         initialScore?: number;
         xiangqiTimeMode?: XiangqiTimeMode;
+        competitionAccount?: { username: string; displayName: string; elo: number };
       }, callback) => {
         try {
           if (!data || !data.playerId) {
@@ -53,6 +54,29 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           const pName = (data.playerName && data.playerName.trim()) || 'Người chơi';
           const pAvatar = data.playerAvatar || '🤠';
           const pRule: GameRule = data.rule || 'TIEN_LEN_MIEN_NAM';
+
+          // Kiểm tra tài khoản thi đấu không được tham gia nhiều phòng đang thi đấu cùng lúc
+          if (data.competitionAccount?.username) {
+            const cleanAcc = data.competitionAccount.username.toLowerCase();
+            const allRooms = roomManager.getAllRooms();
+            for (const r of allRooms) {
+              if (r.status === 'PLAYING') {
+                const dup = r.players.find(
+                  (p) =>
+                    p.competitionUsername &&
+                    p.competitionUsername.toLowerCase() === cleanAcc &&
+                    p.id !== data.playerId
+                );
+                if (dup) {
+                  callback?.({
+                    success: false,
+                    message: `Tài khoản thi đấu "${data.competitionAccount.username}" hiện đang trong trận đấu tại phòng ${r.code}! Không thể tạo/chơi phòng khác cùng lúc.`,
+                  });
+                  return;
+                }
+              }
+            }
+          }
 
           const room = roomManager.createRoom(
             pRule,
@@ -65,7 +89,8 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
             pName,
             pAvatar,
             data.reconnectToken || 'tok_' + Math.random().toString(36).substring(2, 10),
-            data.initialScore
+            data.initialScore,
+            data.competitionAccount
           );
 
           if (!addRes.success) {
@@ -116,6 +141,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
         playerAvatar: string;
         reconnectToken: string;
         initialScore?: number;
+        competitionAccount?: { username: string; displayName: string; elo: number };
       }, callback) => {
         try {
           const code = (data.roomCode || '').toUpperCase().trim();
@@ -126,13 +152,37 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
             return;
           }
 
+          // Kiểm tra tài khoản thi đấu không được tham gia nếu đang trong trận ở phòng khác
+          if (data.competitionAccount?.username) {
+            const cleanAcc = data.competitionAccount.username.toLowerCase();
+            const allRooms = roomManager.getAllRooms();
+            for (const r of allRooms) {
+              if (r.code !== code && r.status === 'PLAYING') {
+                const dup = r.players.find(
+                  (p) =>
+                    p.competitionUsername &&
+                    p.competitionUsername.toLowerCase() === cleanAcc &&
+                    p.id !== data.playerId
+                );
+                if (dup) {
+                  callback?.({
+                    success: false,
+                    message: `Tài khoản thi đấu "${data.competitionAccount.username}" hiện đang trong trận đấu tại phòng ${r.code}! Không thể vào phòng khác.`,
+                  });
+                  return;
+                }
+              }
+            }
+          }
+
           const addRes = room.addPlayer(
             data.playerId,
             socket.id,
             data.playerName,
             data.playerAvatar,
             data.reconnectToken,
-            data.initialScore
+            data.initialScore,
+            data.competitionAccount
           );
 
           if (!addRes.success) {
@@ -148,6 +198,36 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           broadcastRoomUpdate(code);
         } catch (err: any) {
           callback?.({ success: false, message: err.message || 'Lỗi khi vào phòng' });
+        }
+      }
+    );
+
+    // 2.1 Cập nhật tài khoản thi đấu vào phòng
+    socket.on(
+      'ROOM_ATTACH_COMPETITION_ACCOUNT',
+      (
+        data: {
+          roomCode: string;
+          playerId: string;
+          competitionAccount: { username: string; displayName: string; elo: number };
+        },
+        callback
+      ) => {
+        const room = roomManager.getRoom(data?.roomCode);
+        if (!room) {
+          callback?.({ success: false, message: 'Phòng không tồn tại' });
+          return;
+        }
+        const p = room.players.find((pl) => pl.id === data.playerId);
+        if (p && data.competitionAccount) {
+          p.competitionUsername = data.competitionAccount.username;
+          p.competitionDisplayName = data.competitionAccount.displayName;
+          p.competitionElo = data.competitionAccount.elo;
+          room.triggerStateChange();
+          broadcastRoomUpdate(room.code);
+          callback?.({ success: true });
+        } else {
+          callback?.({ success: false, message: 'Không tìm thấy người chơi' });
         }
       }
     );

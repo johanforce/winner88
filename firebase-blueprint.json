@@ -1,0 +1,170 @@
+{
+  "entities": {
+    "CompetitionAccount": {
+      "title": "CompetitionAccount",
+      "description": "Tài khoản thi đấu cờ tướng xếp hạng",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "Tên đăng nhập cố định",
+          "maxLength": 64
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Tên hiển thị kỳ thủ",
+          "maxLength": 100
+        },
+        "password": {
+          "type": "string",
+          "description": "Mật khẩu (mặc định 1)",
+          "maxLength": 100
+        },
+        "elo": {
+          "type": "number",
+          "description": "Điểm Elo hiện tại (khởi điểm 1300, min 1301 cho acc đã đấu)"
+        },
+        "matchesPlayed": {
+          "type": "number",
+          "description": "Tổng số ván đã đấu"
+        },
+        "wins": {
+          "type": "number",
+          "description": "Số ván thắng"
+        },
+        "draws": {
+          "type": "number",
+          "description": "Số ván hòa"
+        },
+        "losses": {
+          "type": "number",
+          "description": "Số ván thua"
+        },
+        "lastMatchAt": {
+          "type": "number",
+          "description": "Thời điểm thi đấu gần nhất (timestamp ms)"
+        },
+        "rankStatus": {
+          "type": "string",
+          "enum": ["UNRANKED", "ACTIVE", "DECAYED", "RESET"],
+          "description": "Trạng thái xếp hạng"
+        },
+        "isLoggedIn": {
+          "type": "boolean",
+          "description": "Trạng thái đang đăng nhập (chỉ cho phép 1 thiết bị/tab đăng nhập tại một thời điểm)"
+        },
+        "activeSessionId": {
+          "type": "string",
+          "description": "Session ID của thiết bị/tab đang giữ đăng nhập"
+        },
+        "lastActiveAt": {
+          "type": "number",
+          "description": "Thời điểm heartbeat hoạt động gần nhất của phiên (ms)"
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Thời điểm cập nhật gần nhất"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Thời điểm tạo tài khoản"
+        }
+      },
+      "required": ["username", "password", "elo", "matchesPlayed", "wins", "draws", "losses"]
+    },
+    "RankedMatch": {
+      "title": "RankedMatch",
+      "description": "Bản ghi lịch sử trận cờ tướng xếp hạng",
+      "type": "object",
+      "properties": {
+        "matchId": {
+          "type": "string",
+          "description": "Mã trận đấu duy nhất",
+          "maxLength": 128
+        },
+        "roomCode": {
+          "type": "string",
+          "description": "Mã phòng thi đấu",
+          "maxLength": 16
+        },
+        "redUsername": {
+          "type": "string",
+          "description": "Tài khoản cầm quân Đỏ",
+          "maxLength": 64
+        },
+        "redPlayerName": {
+          "type": "string",
+          "description": "Tên kỳ thủ Đỏ",
+          "maxLength": 100
+        },
+        "redEloBefore": {
+          "type": "number",
+          "description": "Elo quân Đỏ trước trận"
+        },
+        "redEloAfter": {
+          "type": "number",
+          "description": "Elo quân Đỏ sau trận"
+        },
+        "redEloDelta": {
+          "type": "number",
+          "description": "Biến động Elo quân Đỏ"
+        },
+        "blackUsername": {
+          "type": "string",
+          "description": "Tài khoản cầm quân Đen",
+          "maxLength": 64
+        },
+        "blackPlayerName": {
+          "type": "string",
+          "description": "Tên kỳ thủ Đen",
+          "maxLength": 100
+        },
+        "blackEloBefore": {
+          "type": "number",
+          "description": "Elo quân Đen trước trận"
+        },
+        "blackEloAfter": {
+          "type": "number",
+          "description": "Elo quân Đen sau trận"
+        },
+        "blackEloDelta": {
+          "type": "number",
+          "description": "Biến động Elo quân Đen"
+        },
+        "winnerSide": {
+          "type": "string",
+          "enum": ["RED", "BLACK", "DRAW"],
+          "description": "Bên chiến thắng hoặc HÒA"
+        },
+        "winReason": {
+          "type": "string",
+          "enum": ["CHECKMATE", "TIMEOUT", "RESIGN", "STALEMATE", "AGREED_DRAW", "REPETITION"],
+          "description": "Lý do kết thúc trận"
+        },
+        "movesCount": {
+          "type": "number",
+          "description": "Tổng số nước đi"
+        },
+        "durationSeconds": {
+          "type": "number",
+          "description": "Thời lượng trận đấu tính bằng giây"
+        },
+        "playedAt": {
+          "type": "number",
+          "description": "Thời điểm thi đấu (timestamp ms)"
+        }
+      },
+      "required": ["matchId", "redUsername", "blackUsername", "winnerSide", "winReason", "playedAt"]
+    }
+  },
+  "firestore": {
+    "/competition_accounts/{username}": {
+      "schema": "CompetitionAccount",
+      "description": "Danh sách các tài khoản thi đấu cờ tướng xếp hạng"
+    },
+    "/ranked_matches/{matchId}": {
+      "schema": "RankedMatch",
+      "description": "Lịch sử các ván đấu cờ tướng xếp hạng"
+    }
+  }
+}

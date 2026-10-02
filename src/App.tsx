@@ -6,8 +6,15 @@ import {
   getLastRoomCode,
   clearLastRoomCode,
   savePlayerScore,
+  getSavedCompetitionAccount,
+  saveCompetitionAccount,
+  getClientSessionId,
   socket,
 } from './socket';
+import {
+  heartbeatCompetitionAccount,
+  logoutCompetitionAccount,
+} from './firebase';
 import {
   GameRule,
   RoomPublicState,
@@ -63,6 +70,7 @@ export default function App() {
         playerAvatar: prof.avatar,
         reconnectToken: prof.reconnectToken,
         initialScore: prof.score,
+        competitionAccount: getSavedCompetitionAccount() || undefined,
       },
       (res: { success: boolean; message?: string; roomState?: RoomPublicState }) => {
         isReconnectingRef.current = false;
@@ -182,6 +190,42 @@ export default function App() {
     };
   }, [attemptReconnect]);
 
+  // Periodic heartbeat for single-session competition account & release on window close
+  useEffect(() => {
+    const checkAndSendHeartbeat = () => {
+      const saved = getSavedCompetitionAccount();
+      if (saved?.username) {
+        const clientSessionId = getClientSessionId();
+        heartbeatCompetitionAccount(saved.username, clientSessionId).then((res) => {
+          if (!res.stillValid) {
+            // Phiên đã bị thay thế hoặc đăng nhập ở nơi khác
+            saveCompetitionAccount(null);
+            setGlobalError(
+              `Tài khoản thi đấu "${saved.username}" đã được đăng nhập tại một thiết bị/tab khác. Phiên tại thiết bị này đã tự động kết thúc!`
+            );
+          }
+        });
+      }
+    };
+
+    checkAndSendHeartbeat();
+    const heartbeatTimer = setInterval(checkAndSendHeartbeat, 20000);
+
+    const handleBeforeUnload = () => {
+      const saved = getSavedCompetitionAccount();
+      if (saved?.username) {
+        logoutCompetitionAccount(saved.username, getClientSessionId());
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(heartbeatTimer);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
   // Handler: Set name
   const handleProfileComplete = (name: string, avatar: string) => {
     const updated = { ...profile, name, avatar };
@@ -216,6 +260,7 @@ export default function App() {
         reconnectToken: profile.reconnectToken,
         initialScore: profile.score,
         xiangqiTimeMode,
+        competitionAccount: getSavedCompetitionAccount() || undefined,
       },
       (res: { success: boolean; roomCode?: string; message?: string; roomState?: RoomPublicState }) => {
         responded = true;
@@ -258,6 +303,7 @@ export default function App() {
         playerAvatar: profile.avatar,
         reconnectToken: profile.reconnectToken,
         initialScore: profile.score,
+        competitionAccount: getSavedCompetitionAccount() || undefined,
       },
       (res: { success: boolean; roomCode?: string; message?: string; roomState?: RoomPublicState }) => {
         responded = true;

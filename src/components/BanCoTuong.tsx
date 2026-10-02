@@ -43,6 +43,8 @@ import { socket } from '../socket';
 import { KhungChat } from './KhungChat';
 import { RuleGuideModal } from './RuleGuideModal';
 import { XiangqiSimulator } from './XiangqiSimulator';
+import { RankedLeaderboardModal } from './RankedLeaderboardModal';
+import { RankedMatchHistoryModal } from './RankedMatchHistoryModal';
 import {
   getPieceAt,
   getLegalMoves,
@@ -90,6 +92,8 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [showResignConfirm, setShowResignConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'MOVES' | 'SPECTATORS' | 'CHAT'>('MOVES');
   const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
@@ -442,6 +446,28 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
 
           <button
             type="button"
+            onClick={() => setIsLeaderboardOpen(true)}
+            id="btn-banco-leaderboard"
+            className="px-2 sm:px-2.5 py-1.5 bg-stone-900 hover:bg-stone-800 border border-amber-500/40 rounded-xl text-xs font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer touch-manipulation"
+            title="Bảng xếp hạng Elo Cờ Tướng"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">BXH</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsHistoryOpen(true)}
+            id="btn-banco-history"
+            className="px-2 sm:px-2.5 py-1.5 bg-stone-900 hover:bg-stone-800 border border-emerald-500/40 rounded-xl text-xs font-bold text-emerald-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer touch-manipulation"
+            title="Lịch sử các ván đấu cờ xếp hạng"
+          >
+            <History className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">Lịch Sử</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsFlipped((prev) => !prev)}
             id="btn-flip-board"
             className="px-2 sm:px-2.5 py-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 rounded-xl text-xs font-semibold text-stone-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer touch-manipulation"
@@ -598,10 +624,15 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                     )}
                   </div>
                   <div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-extrabold text-sm text-stone-100">
                         {opp?.name || (oppSide === 'RED' ? 'Kỳ thủ Đỏ' : 'Kỳ thủ Đen')}
                       </span>
+                      {opp?.competitionElo !== undefined && (
+                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-1.5 py-0.5 rounded font-mono font-bold">
+                          🏆 {opp.competitionElo} Elo
+                        </span>
+                      )}
                       <span
                         className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
                           oppSide === 'RED'
@@ -619,22 +650,29 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 </div>
 
                 {/* Clock */}
-                <div
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
-                    isOppTurn
-                      ? isLowTime
-                        ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
-                        : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
-                      : 'bg-stone-950 border-stone-800 text-stone-400'
-                  }`}
-                >
-                  <Clock className={`w-4 h-4 ${isOppTurn ? 'animate-spin' : ''}`} />
-                  <span>{formatTime(oppTime)}</span>
-                  {xiangqi?.incrementSeconds ? (
-                    <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
-                      +{xiangqi.incrementSeconds}s
-                    </span>
-                  ) : null}
+                <div className="flex flex-col items-end gap-1">
+                  <div
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
+                      isOppTurn
+                        ? isLowTime
+                          ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
+                          : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    }`}
+                  >
+                    <Clock className={`w-4 h-4 ${isOppTurn ? 'animate-spin' : ''}`} />
+                    <span>{formatTime(oppTime)}</span>
+                    {xiangqi?.incrementSeconds ? (
+                      <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
+                        +{xiangqi.incrementSeconds}s
+                      </span>
+                    ) : null}
+                  </div>
+                  {xiangqi?.timeMode === 'RANKED' && isOppTurn && (
+                    <div className="text-[10px] text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-500/30">
+                      Nước đi: {formatTime(roomState?.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120)}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -1007,13 +1045,18 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                     )}
                   </div>
                   <div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-extrabold text-sm text-stone-100">
                         {mePlayer?.name || (myCurrentSide === 'RED' ? 'Kỳ thủ Đỏ' : 'Kỳ thủ Đen')}
                       </span>
                       {me?.id === mePlayer?.id && (
                         <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded font-bold">
                           Bạn
+                        </span>
+                      )}
+                      {mePlayer?.competitionElo !== undefined && (
+                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-1.5 py-0.5 rounded font-mono font-bold">
+                          🏆 {mePlayer.competitionElo} Elo
                         </span>
                       )}
                       <span
@@ -1033,22 +1076,29 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 </div>
 
                 {/* Clock */}
-                <div
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
-                    isTurn
-                      ? isLowTime
-                        ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
-                        : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
-                      : 'bg-stone-950 border-stone-800 text-stone-400'
-                  }`}
-                >
-                  <Clock className={`w-4 h-4 ${isTurn ? 'animate-spin' : ''}`} />
-                  <span>{formatTime(myTime)}</span>
-                  {xiangqi?.incrementSeconds ? (
-                    <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
-                      +{xiangqi.incrementSeconds}s
-                    </span>
-                  ) : null}
+                <div className="flex flex-col items-end gap-1">
+                  <div
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
+                      isTurn
+                        ? isLowTime
+                          ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
+                          : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    }`}
+                  >
+                    <Clock className={`w-4 h-4 ${isTurn ? 'animate-spin' : ''}`} />
+                    <span>{formatTime(myTime)}</span>
+                    {xiangqi?.incrementSeconds ? (
+                      <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
+                        +{xiangqi.incrementSeconds}s
+                      </span>
+                    ) : null}
+                  </div>
+                  {xiangqi?.timeMode === 'RANKED' && isTurn && (
+                    <div className="text-[10px] text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-500/30">
+                      Nước đi: {formatTime(roomState?.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120)}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -1560,7 +1610,7 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
             </div>
             <h3 className="text-base font-bold text-white">Xác Nhận Đầu Hàng?</h3>
             <p className="text-xs text-stone-300">
-              Bạn có chắc chắn muốn nhận thua ván cờ chớp này không? Điểm cược 100 xu sẽ chuyển cho
+              Bạn có chắc chắn muốn nhận thua ván cờ này không? Điểm cược 100 xu sẽ chuyển cho
               đối thủ.
             </p>
             <div className="flex gap-2">
@@ -1622,7 +1672,7 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                   {xiangqi.winReason === 'CHECKMATE'
                     ? 'Chiếu bí (Checkmate)'
                     : xiangqi.winReason === 'TIMEOUT'
-                    ? 'Hết thời gian cờ chớp (Timeout)'
+                    ? 'Hết thời gian thi đấu / Quá 2 phút suy nghĩ (Timeout)'
                     : xiangqi.winReason === 'RESIGN'
                     ? 'Đối thủ xin đầu hàng'
                     : xiangqi.winReason === 'STALEMATE'
@@ -1644,6 +1694,11 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 >
                   <span className="text-2xl block mb-1">{redPlayer?.avatar || '🔴'}</span>
                   <strong className="block text-sm text-white">{redPlayer?.name || 'Đỏ'}</strong>
+                  {redPlayer?.competitionElo !== undefined && (
+                    <span className="text-[10px] text-amber-400 font-mono font-bold block mt-0.5">
+                      🏆 Elo: {redPlayer.competitionElo}
+                    </span>
+                  )}
                   <span className="text-[10px] block mt-0.5">Kỳ thủ Đỏ</span>
                   <span
                     className={`font-black text-xs block mt-1 ${
@@ -1663,6 +1718,11 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 >
                   <span className="text-2xl block mb-1">{blackPlayer?.avatar || '⚫'}</span>
                   <strong className="block text-sm text-white">{blackPlayer?.name || 'Đen'}</strong>
+                  {blackPlayer?.competitionElo !== undefined && (
+                    <span className="text-[10px] text-amber-400 font-mono font-bold block mt-0.5">
+                      🏆 Elo: {blackPlayer.competitionElo}
+                    </span>
+                  )}
                   <span className="text-[10px] block mt-0.5">Kỳ thủ Đen</span>
                   <span
                     className={`font-black text-xs block mt-1 ${
@@ -1692,6 +1752,28 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                   <span>Xem Lại Nước Đi ({xiangqi.moveHistory.length} nước)</span>
                 </button>
 
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsLeaderboardOpen(true)}
+                    id="btn-co-tuong-endgame-leaderboard"
+                    className="py-2.5 px-3 bg-stone-800 hover:bg-stone-700 border border-amber-500/50 text-amber-300 font-bold text-xs rounded-xl shadow transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Bảng Xếp Hạng</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsHistoryOpen(true)}
+                    id="btn-co-tuong-endgame-history"
+                    className="py-2.5 px-3 bg-stone-800 hover:bg-stone-700 border border-emerald-500/50 text-emerald-300 font-bold text-xs rounded-xl shadow transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <History className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Lịch Sử Đấu</span>
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={handleResetToWaiting}
@@ -1718,6 +1800,26 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
       <XiangqiSimulator
         isOpen={isSimulatorOpen}
         onClose={() => setIsSimulatorOpen(false)}
+      />
+
+      {/* Ranked Leaderboard Modal */}
+      <RankedLeaderboardModal
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+        onOpenHistory={() => {
+          setIsLeaderboardOpen(false);
+          setIsHistoryOpen(true);
+        }}
+      />
+
+      {/* Ranked Match History Modal */}
+      <RankedMatchHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onOpenLeaderboard={() => {
+          setIsHistoryOpen(false);
+          setIsLeaderboardOpen(true);
+        }}
       />
 
       {/* Discreet AI Activation Toast Notification */}

@@ -13,6 +13,7 @@ import {
   Flame,
   UserCheck,
   Award,
+  Trophy,
   MessageSquare,
   Anchor,
   Crosshair,
@@ -162,7 +163,7 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
     );
   };
 
-  const handleSetXiangqiTimeMode = (timeMode: 'STANDARD' | 'BLITZ_5M') => {
+  const handleSetXiangqiTimeMode = (timeMode: 'STANDARD' | 'RANKED') => {
     setErrorMsg(null);
     socket.emit(
       'ROOM_SET_XIANGQI_TIME_MODE',
@@ -661,8 +662,8 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                   </div>
                   <p className="text-xs text-slate-300 mt-1">
                     {roomState.xiangqiTimeMode === 'STANDARD'
-                      ? '🏆 Cờ Tiêu Chuẩn Quốc Tế: 60 phút mỗi bên + 30 giây tích lũy cho mỗi nước đi (theo chuẩn Liên Đoàn Cờ Tướng Quốc Tế WXF).'
-                      : '⚡ Cờ Chớp: 5 phút mỗi bên + 3 giây tích lũy cho mỗi nước đi.'}
+                      ? '🏆 Cờ Tiêu Chuẩn Quốc Tế: 60 phút mỗi bên + 30 giây tích lũy cho mỗi nước đi (theo chuẩn WXF).'
+                      : '🏆 Cờ Tướng Xếp Hạng: 30 phút mỗi bên không cộng thêm, 2 phút tối đa/nước đi, tính điểm Elo quốc tế.'}
                   </p>
                 </div>
 
@@ -670,42 +671,42 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                   <div className="flex items-center gap-2 shrink-0 bg-slate-950 p-1 rounded-xl border border-slate-800">
                     <button
                       type="button"
+                      id="btn-time-mode-ranked"
+                      onClick={() => handleSetXiangqiTimeMode('RANKED')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        roomState.xiangqiTimeMode !== 'STANDARD'
+                          ? 'bg-amber-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Trophy className="w-3.5 h-3.5" />
+                      <span>Cờ Xếp Hạng (30p, 2p/nước)</span>
+                    </button>
+                    <button
+                      type="button"
                       id="btn-time-mode-standard"
                       onClick={() => handleSetXiangqiTimeMode('STANDARD')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                         roomState.xiangqiTimeMode === 'STANDARD'
-                          ? 'bg-amber-600 text-white shadow'
+                          ? 'bg-red-700 text-white shadow'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
                       <Award className="w-3.5 h-3.5" />
                       <span>Cờ Tiêu Chuẩn (60p + 30s)</span>
                     </button>
-                    <button
-                      type="button"
-                      id="btn-time-mode-blitz"
-                      onClick={() => handleSetXiangqiTimeMode('BLITZ_5M')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                        roomState.xiangqiTimeMode !== 'STANDARD'
-                          ? 'bg-red-700 text-white shadow'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Flame className="w-3.5 h-3.5" />
-                      <span>Cờ Chớp (5p + 3s)</span>
-                    </button>
                   </div>
                 ) : (
                   <div className="shrink-0">
                     {roomState.xiangqiTimeMode === 'STANDARD' ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/60 border border-amber-800 text-amber-300 text-xs font-bold rounded-xl">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-950/60 border border-red-800 text-red-300 text-xs font-bold rounded-xl">
                         <Award className="w-3.5 h-3.5" />
                         <span>Cờ Tiêu Chuẩn (60p + 30s WXF)</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-950/60 border border-red-800 text-red-300 text-xs font-bold rounded-xl">
-                        <Flame className="w-3.5 h-3.5" />
-                        <span>Cờ Chớp (5p + 3s)</span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/60 border border-amber-800 text-amber-300 text-xs font-bold rounded-xl">
+                        <Trophy className="w-3.5 h-3.5" />
+                        <span>Cờ Xếp Hạng (30p, 2p/nước)</span>
                       </span>
                     )}
                   </div>

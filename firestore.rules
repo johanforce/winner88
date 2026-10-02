@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Danh sách tài khoản thi đấu cờ tướng xếp hạng
+    match /competition_accounts/{username} {
+      allow get, list: if isValidId(username);
+      // Cho phép tạo/cập nhật tài khoản thi đấu (đổi pass, cập nhật Elo sau ván đấu)
+      allow create, update: if isValidId(username)
+        && request.resource.data.username is string
+        && request.resource.data.username == username
+        && request.resource.data.password is string
+        && request.resource.data.password.size() <= 100
+        && request.resource.data.elo is number
+        && request.resource.data.matchesPlayed is number
+        && request.resource.data.wins is number
+        && request.resource.data.draws is number
+        && request.resource.data.losses is number;
+      allow delete: if false;
+    }
+
+    // Lịch sử trận đấu cờ tướng xếp hạng
+    match /ranked_matches/{matchId} {
+      allow get, list: if isValidId(matchId);
+      allow create: if isValidId(matchId)
+        && request.resource.data.matchId is string
+        && request.resource.data.matchId == matchId
+        && request.resource.data.redUsername is string
+        && request.resource.data.blackUsername is string
+        && request.resource.data.winnerSide in ['RED', 'BLACK', 'DRAW']
+        && request.resource.data.playedAt is number;
+      allow update, delete: if false;
+    }
+
+    // Test connection doc
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}

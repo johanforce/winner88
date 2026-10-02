@@ -11,11 +11,21 @@ import {
   X,
   Flame,
   Award,
+  Trophy,
+  History,
+  ShieldCheck,
 } from 'lucide-react';
 import { GameRule, RoomListItem, XiangqiTimeMode } from '../types';
-import { socket } from '../socket';
+import {
+  socket,
+  getSavedCompetitionAccount,
+  SavedCompetitionAccount,
+} from '../socket';
 import { RuleGuideModal } from './RuleGuideModal';
 import { XiangqiSimulator } from './XiangqiSimulator';
+import { RankedLoginModal } from './RankedLoginModal';
+import { RankedLeaderboardModal } from './RankedLeaderboardModal';
+import { RankedMatchHistoryModal } from './RankedMatchHistoryModal';
 
 interface LobbyProps {
   playerName: string;
@@ -43,10 +53,23 @@ export const Lobby: React.FC<LobbyProps> = ({
   const [secretFeedback, setSecretFeedback] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedRule, setSelectedRule] = useState<GameRule>('TIEN_LEN_MIEN_NAM');
-  const [selectedTimeMode, setSelectedTimeMode] = useState<XiangqiTimeMode>('STANDARD');
+  const [selectedTimeMode, setSelectedTimeMode] = useState<XiangqiTimeMode>('RANKED');
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Ranked Xiangqi competition account & modal states
+  const [competitionAccount, setCompetitionAccount] = useState<SavedCompetitionAccount | null>(() =>
+    getSavedCompetitionAccount()
+  );
+  const [isRankedLoginOpen, setIsRankedLoginOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    | { type: 'CREATE'; rule: GameRule; timeMode?: XiangqiTimeMode }
+    | { type: 'JOIN'; roomCode: string }
+    | null
+  >(null);
 
   const feedbackTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -115,7 +138,57 @@ export const Lobby: React.FC<LobbyProps> = ({
       return;
     }
     setJoinError(null);
+    if (code.startsWith('CT')) {
+      const saved = getSavedCompetitionAccount();
+      if (!saved) {
+        setPendingAction({ type: 'JOIN', roomCode: code });
+        setIsRankedLoginOpen(true);
+        return;
+      }
+    }
     onJoinRoom(code);
+  };
+
+  const handleAttemptJoin = (room: RoomListItem) => {
+    if (room.rule === 'CO_TUONG' && (room.xiangqiTimeMode === 'RANKED' || !room.xiangqiTimeMode)) {
+      const saved = getSavedCompetitionAccount();
+      if (!saved) {
+        setPendingAction({ type: 'JOIN', roomCode: room.code });
+        setIsRankedLoginOpen(true);
+        return;
+      }
+    }
+    onJoinRoom(room.code);
+  };
+
+  const handleAttemptCreate = () => {
+    if (selectedRule === 'CO_TUONG' && (selectedTimeMode === 'RANKED' || !selectedTimeMode)) {
+      const saved = getSavedCompetitionAccount();
+      if (!saved) {
+        setPendingAction({
+          type: 'CREATE',
+          rule: 'CO_TUONG',
+          timeMode: 'RANKED',
+        });
+        setIsRankedLoginOpen(true);
+        return;
+      }
+    }
+    setIsCreateModalOpen(false);
+    onCreateRoom(selectedRule, selectedRule === 'CO_TUONG' ? selectedTimeMode : undefined);
+  };
+
+  const handleRankedLoginSuccess = (account: SavedCompetitionAccount) => {
+    setCompetitionAccount(account);
+    if (pendingAction) {
+      if (pendingAction.type === 'CREATE') {
+        setIsCreateModalOpen(false);
+        onCreateRoom(pendingAction.rule || 'CO_TUONG', pendingAction.timeMode || 'RANKED');
+      } else if (pendingAction.type === 'JOIN' && pendingAction.roomCode) {
+        onJoinRoom(pendingAction.roomCode);
+      }
+      setPendingAction(null);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,13 +218,52 @@ export const Lobby: React.FC<LobbyProps> = ({
               Sảnh Đánh Bài & Trò Chơi Trực Tuyến
             </h1>
             <p className="text-[11px] text-emerald-300/80 font-medium">
-              Tiến Lên &bull; Sâm Lốc &bull; Cờ Tướng &bull; Cờ Vua &bull; Cờ Caro &bull; Bắn Tàu &bull; Cá Ngựa
+              Cờ Tướng Xếp Hạng &bull; Tiến Lên &bull; Sâm Lốc &bull; Cờ Vua &bull; Cờ Caro &bull; Bắn Tàu &bull; Cá Ngựa
             </p>
           </div>
         </div>
 
         {/* User profile capsule & rule button */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+          {/* Nút Tài khoản Cờ Xếp Hạng & Bảng Xếp Hạng */}
+          <button
+            onClick={() => setIsRankedLoginOpen(true)}
+            id="btn-open-ranked-account"
+            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition touch-manipulation cursor-pointer shadow-sm border ${
+              competitionAccount
+                ? 'bg-gradient-to-r from-red-950/60 to-amber-950/60 border-amber-500/60 text-amber-300 hover:text-white'
+                : 'bg-slate-900 hover:bg-slate-800 border-amber-500/40 text-amber-300 hover:text-white'
+            }`}
+            title="Đăng nhập tài khoản thi đấu cờ tướng xếp hạng"
+          >
+            <Trophy className="w-4 h-4 text-amber-400" />
+            <span className="hidden sm:inline">
+              {competitionAccount
+                ? `${competitionAccount.displayName} (${competitionAccount.elo} Elo)`
+                : 'Cờ Xếp Hạng'}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setIsLeaderboardOpen(true)}
+            id="btn-open-leaderboard"
+            className="p-2 sm:px-2.5 sm:py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-amber-400 hover:text-white flex items-center gap-1.5 transition touch-manipulation cursor-pointer"
+            title="Bảng xếp hạng Elo Cờ Tướng"
+          >
+            <Award className="w-4 h-4" />
+            <span className="hidden md:inline">BXH</span>
+          </button>
+
+          <button
+            onClick={() => setIsHistoryOpen(true)}
+            id="btn-open-history"
+            className="p-2 sm:px-2.5 sm:py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-emerald-400 hover:text-white flex items-center gap-1.5 transition touch-manipulation cursor-pointer"
+            title="Lịch sử các ván đấu cờ xếp hạng"
+          >
+            <History className="w-4 h-4" />
+            <span className="hidden md:inline">Lịch Sử</span>
+          </button>
+
           <button
             onClick={() => setIsSimulatorOpen(true)}
             id="btn-open-simulator-lobby"
@@ -159,7 +271,7 @@ export const Lobby: React.FC<LobbyProps> = ({
             title="Cờ Thế & Simulator (Tự xếp cờ & giải)"
           >
             <span className="text-sm">🧩</span>
-            <span className="hidden sm:inline">Cờ Thế (Simulator)</span>
+            <span className="hidden sm:inline">Cờ Thế</span>
           </button>
 
           <button
@@ -169,7 +281,7 @@ export const Lobby: React.FC<LobbyProps> = ({
             title="Luật & Mức Phạt"
           >
             <BookOpen className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Luật & Mức Phạt</span>
+            <span className="hidden sm:inline">Luật</span>
           </button>
 
           <div
@@ -407,7 +519,10 @@ export const Lobby: React.FC<LobbyProps> = ({
                       return { text: '🔥 Sâm Lốc', cls: 'bg-amber-950 text-amber-300 border-amber-800' };
                     case 'CO_TUONG':
                       return {
-                        text: room.xiangqiTimeMode === 'BLITZ_5M' ? '⚡ Cờ Tướng (Chớp 5p)' : '🏆 Cờ Tướng (Tiêu chuẩn)',
+                        text:
+                          room.xiangqiTimeMode === 'RANKED' || !room.xiangqiTimeMode
+                            ? '🏆 Cờ Tướng Xếp Hạng'
+                            : '📜 Cờ Tướng (Tiêu chuẩn)',
                         cls: 'bg-red-950 text-red-300 border-red-800',
                       };
                     case 'CO_VUA':
@@ -471,7 +586,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                         type="button"
                         id={`btn-join-${room.code}`}
                         disabled={!canJoin}
-                        onClick={() => onJoinRoom(room.code)}
+                        onClick={() => handleAttemptJoin(room)}
                         className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold transition touch-manipulation ${
                           canJoin
                             ? isPlaying && isBoardGame
@@ -565,9 +680,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                     }`}
                   >
                     <span className="text-2xl mb-1.5 block">🏆</span>
-                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Tướng</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Tướng Xếp Hạng</span>
                     <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
-                      Tiêu chuẩn hoặc cờ chớp 5 phút.
+                      Đấu xếp hạng tính Elo hoặc Tiêu chuẩn.
                     </span>
                   </button>
 
@@ -649,41 +764,48 @@ export const Lobby: React.FC<LobbyProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <button
                       type="button"
-                      id="btn-select-standard-time"
-                      onClick={() => setSelectedTimeMode('STANDARD')}
+                      id="btn-select-ranked-time"
+                      onClick={() => setSelectedTimeMode('RANKED')}
                       className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-start gap-3 ${
-                        selectedTimeMode === 'STANDARD'
-                          ? 'bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/30 text-white'
+                        selectedTimeMode === 'RANKED'
+                          ? 'bg-amber-950/70 border-amber-500 ring-2 ring-amber-500/30 text-white'
                           : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                       }`}
                     >
-                      <Award className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                      <Trophy className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                       <div>
                         <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <span>Cờ Tiêu Chuẩn Quốc Tế</span>
-                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded">WXF</span>
+                          <span>Cờ Tướng Xếp Hạng</span>
+                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded font-mono font-bold">
+                            RANKED
+                          </span>
                         </div>
-                        <div className="text-[11px] text-slate-300 mt-0.5">
-                          60 phút + 30s tích lũy/nước
+                        <div className="text-[11px] text-slate-300 mt-0.5 leading-tight">
+                          30 phút tổng &bull; 2 phút/nước &bull; Tính Elo
                         </div>
                       </div>
                     </button>
 
                     <button
                       type="button"
-                      id="btn-select-blitz-time"
-                      onClick={() => setSelectedTimeMode('BLITZ_5M')}
+                      id="btn-select-standard-time"
+                      onClick={() => setSelectedTimeMode('STANDARD')}
                       className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-start gap-3 ${
-                        selectedTimeMode === 'BLITZ_5M'
+                        selectedTimeMode === 'STANDARD'
                           ? 'bg-red-950/60 border-red-500 ring-2 ring-red-500/30 text-white'
                           : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                       }`}
                     >
-                      <Flame className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                      <Award className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                       <div>
-                        <div className="text-xs font-bold text-white">Cờ Chớp 5 Phút</div>
-                        <div className="text-[11px] text-slate-300 mt-0.5">
-                          5 phút + 3s tích lũy/nước
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>Cờ Tiêu Chuẩn Quốc Tế</span>
+                          <span className="text-[9px] bg-red-500/20 text-red-300 px-1 rounded font-mono font-bold">
+                            WXF
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-300 mt-0.5 leading-tight">
+                          60 phút + 30s tích lũy/nước
                         </div>
                       </div>
                     </button>
@@ -725,10 +847,7 @@ export const Lobby: React.FC<LobbyProps> = ({
               <button
                 type="button"
                 id="btn-confirm-create-room"
-                onClick={() => {
-                  setIsCreateModalOpen(false);
-                  onCreateRoom(selectedRule, selectedRule === 'CO_TUONG' ? selectedTimeMode : undefined);
-                }}
+                onClick={handleAttemptCreate}
                 className="w-full min-h-[46px] py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm rounded-xl shadow-lg transition cursor-pointer touch-manipulation"
               >
                 Khởi Tạo &amp; Vào Phòng Ngay
@@ -749,6 +868,44 @@ export const Lobby: React.FC<LobbyProps> = ({
       <XiangqiSimulator
         isOpen={isSimulatorOpen}
         onClose={() => setIsSimulatorOpen(false)}
+      />
+
+      {/* Ranked Xiangqi Login Modal */}
+      <RankedLoginModal
+        isOpen={isRankedLoginOpen}
+        onClose={() => {
+          setIsRankedLoginOpen(false);
+          setPendingAction(null);
+        }}
+        onLoginSuccess={handleRankedLoginSuccess}
+        onOpenLeaderboard={() => {
+          setIsRankedLoginOpen(false);
+          setIsLeaderboardOpen(true);
+        }}
+        onOpenHistory={() => {
+          setIsRankedLoginOpen(false);
+          setIsHistoryOpen(true);
+        }}
+      />
+
+      {/* Ranked Leaderboard Modal */}
+      <RankedLeaderboardModal
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+        onOpenHistory={() => {
+          setIsLeaderboardOpen(false);
+          setIsHistoryOpen(true);
+        }}
+      />
+
+      {/* Ranked Match History Modal */}
+      <RankedMatchHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onOpenLeaderboard={() => {
+          setIsHistoryOpen(false);
+          setIsLeaderboardOpen(true);
+        }}
       />
     </div>
   );

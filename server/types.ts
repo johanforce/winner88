@@ -206,7 +206,7 @@ export type XiangqiPieceType =
 
 export type XiangqiSide = 'RED' | 'BLACK';
 
-export type XiangqiTimeMode = 'STANDARD' | 'BLITZ_5M';
+export type XiangqiTimeMode = 'STANDARD' | 'RANKED' | 'BLITZ_5M';
 
 export interface XiangqiPiece {
   id: string;
@@ -244,6 +244,11 @@ export interface XiangqiState {
   winnerSide: XiangqiSide | 'DRAW' | null;
   winReason?: 'CHECKMATE' | 'TIMEOUT' | 'RESIGN' | 'STALEMATE' | 'AGREED_DRAW' | 'REPETITION';
   drawOfferFrom?: XiangqiSide | null;
+  moveTimeRemaining?: number;
+  redUsername?: string;
+  blackUsername?: string;
+  redElo?: number;
+  blackElo?: number;
 }
 
 export interface Card {
@@ -308,6 +313,9 @@ export interface PlayerPublicInfo {
   caNguaColor?: CaNguaColor;
   chessSide?: ChessSide;
   returnedToWaiting?: boolean;
+  competitionUsername?: string;
+  competitionDisplayName?: string;
+  competitionElo?: number;
 }
 
 export interface Player {
@@ -332,6 +340,9 @@ export interface Player {
   caNguaColor?: CaNguaColor;
   chessSide?: ChessSide;
   returnedToWaiting?: boolean;
+  competitionUsername?: string;
+  competitionDisplayName?: string;
+  competitionElo?: number;
 }
 
 export interface ChatMessage {

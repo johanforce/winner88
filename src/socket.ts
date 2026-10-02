@@ -146,3 +146,68 @@ export function clearLastRoomCode() {
     // ignore
   }
 }
+
+const COMPETITION_ACCOUNT_KEY = 'winner88_competition_account';
+const REMEMBER_ACCOUNT_KEY = 'winner88_remember_account';
+
+export interface SavedCompetitionAccount {
+  username: string;
+  displayName: string;
+  elo: number;
+}
+
+export function getSavedCompetitionAccount(): SavedCompetitionAccount | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(COMPETITION_ACCOUNT_KEY) || sessionStorage.getItem(COMPETITION_ACCOUNT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function saveCompetitionAccount(account: SavedCompetitionAccount | null, remember = true) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!account) {
+      localStorage.removeItem(COMPETITION_ACCOUNT_KEY);
+      localStorage.removeItem(REMEMBER_ACCOUNT_KEY);
+      sessionStorage.removeItem(COMPETITION_ACCOUNT_KEY);
+      return;
+    }
+    if (remember) {
+      localStorage.setItem(COMPETITION_ACCOUNT_KEY, JSON.stringify(account));
+      localStorage.setItem(REMEMBER_ACCOUNT_KEY, 'true');
+    } else {
+      localStorage.removeItem(COMPETITION_ACCOUNT_KEY);
+      localStorage.removeItem(REMEMBER_ACCOUNT_KEY);
+      sessionStorage.setItem(COMPETITION_ACCOUNT_KEY, JSON.stringify(account));
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function getRememberAccountPreference(): boolean {
+  if (typeof window === 'undefined') return true;
+  const val = localStorage.getItem(REMEMBER_ACCOUNT_KEY);
+  return val === null ? true : val === 'true';
+}
+
+const CLIENT_DEVICE_SESSION_KEY = 'winner88_client_device_session_id';
+
+export function getClientSessionId(): string {
+  if (typeof window === 'undefined') return 'sess_server';
+  try {
+    let sess = sessionStorage.getItem(CLIENT_DEVICE_SESSION_KEY);
+    if (!sess) {
+      sess = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+      sessionStorage.setItem(CLIENT_DEVICE_SESSION_KEY, sess);
+    }
+    return sess;
+  } catch {
+    return 'sess_' + Math.random().toString(36).substring(2, 9);
+  }
+}
+
