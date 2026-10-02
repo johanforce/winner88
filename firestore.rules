@@ -12,7 +12,8 @@ service cloud.firestore {
 
     // Danh sách tài khoản thi đấu cờ tướng xếp hạng
     match /competition_accounts/{username} {
-      allow get, list: if isValidId(username);
+      allow get: if isValidId(username);
+      allow list: if true;
       // Cho phép tạo/cập nhật tài khoản thi đấu (đổi pass, cập nhật Elo sau ván đấu)
       allow create, update: if isValidId(username)
         && request.resource.data.username is string
@@ -29,7 +30,8 @@ service cloud.firestore {
 
     // Lịch sử trận đấu cờ tướng xếp hạng
     match /ranked_matches/{matchId} {
-      allow get, list: if isValidId(matchId);
+      allow get: if isValidId(matchId);
+      allow list: if true;
       allow create: if isValidId(matchId)
         && request.resource.data.matchId is string
         && request.resource.data.matchId == matchId

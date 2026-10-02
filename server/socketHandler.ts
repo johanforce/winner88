@@ -223,6 +223,7 @@ export function setupSocketHandlers(io: Server, roomManager: RoomManager) {
           p.competitionUsername = data.competitionAccount.username;
           p.competitionDisplayName = data.competitionAccount.displayName;
           p.competitionElo = data.competitionAccount.elo;
+          p.name = data.competitionAccount.displayName || data.competitionAccount.username || p.name;
           room.triggerStateChange();
           broadcastRoomUpdate(room.code);
           callback?.({ success: true });

@@ -14,6 +14,7 @@ import {
 import {
   heartbeatCompetitionAccount,
   logoutCompetitionAccount,
+  getCompetitionAccount,
 } from './firebase';
 import {
   GameRule,
@@ -40,9 +41,40 @@ export default function App() {
     profileRef.current = profile;
   }, [profile]);
 
-  const [currentScreen, setCurrentScreen] = useState<'NAME_INPUT' | 'LOBBY' | 'ROOM'>(
-    () => (profile.name ? 'LOBBY' : 'NAME_INPUT')
-  );
+  const [currentScreen, setCurrentScreen] = useState<'NAME_INPUT' | 'LOBBY' | 'ROOM'>(() => {
+    const savedComp = getSavedCompetitionAccount();
+    if (savedComp?.username) return 'LOBBY';
+    return profile.name ? 'LOBBY' : 'NAME_INPUT';
+  });
+
+  // Tự động đồng bộ tên thi đấu từ tài khoản đã đăng nhập
+  useEffect(() => {
+    const saved = getSavedCompetitionAccount();
+    if (saved) {
+      const compName = saved.displayName || saved.username;
+      if (compName && profileRef.current.name !== compName) {
+        const updated = { ...profileRef.current, name: compName };
+        setProfile(updated);
+        savePlayerProfile(updated);
+      }
+      getCompetitionAccount(saved.username).then((acc) => {
+        if (acc) {
+          const fresh = {
+            username: acc.username,
+            displayName: acc.displayName,
+            elo: acc.elo,
+          };
+          saveCompetitionAccount(fresh);
+          const freshName = acc.displayName || acc.username;
+          if (freshName && profileRef.current.name !== freshName) {
+            const upd = { ...profileRef.current, name: freshName };
+            setProfile(upd);
+            savePlayerProfile(upd);
+          }
+        }
+      });
+    }
+  }, []);
 
   const [roomState, setRoomState] = useState<RoomPublicState | null>(null);
   const [playerCards, setPlayerCards] = useState<Card[]>([]);
@@ -143,6 +175,17 @@ export default function App() {
         setProfile((prev) => (prev.score === me.score ? prev : { ...prev, score: me.score }));
       }
 
+      // Đồng bộ Elo tài khoản thi đấu sau khi kết thúc ván
+      if (me.competitionUsername && typeof me.competitionElo === 'number') {
+        const savedComp = getSavedCompetitionAccount();
+        if (savedComp && savedComp.username === me.competitionUsername && savedComp.elo !== me.competitionElo) {
+          saveCompetitionAccount({
+            ...savedComp,
+            elo: me.competitionElo,
+          });
+        }
+      }
+
       if (
         state.status === 'PLAYING' &&
         currentProf.id &&
@@ -211,18 +254,8 @@ export default function App() {
     checkAndSendHeartbeat();
     const heartbeatTimer = setInterval(checkAndSendHeartbeat, 20000);
 
-    const handleBeforeUnload = () => {
-      const saved = getSavedCompetitionAccount();
-      if (saved?.username) {
-        logoutCompetitionAccount(saved.username, getClientSessionId());
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
     return () => {
       clearInterval(heartbeatTimer);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
 
@@ -250,17 +283,20 @@ export default function App() {
       }
     }, 7000);
 
+    const savedComp = getSavedCompetitionAccount();
+    const activePlayerName = savedComp?.displayName || savedComp?.username || profile.name;
+
     socket.emit(
       'ROOM_CREATE',
       {
         playerId: profile.id,
-        playerName: profile.name,
+        playerName: activePlayerName,
         playerAvatar: profile.avatar,
         rule,
         reconnectToken: profile.reconnectToken,
         initialScore: profile.score,
         xiangqiTimeMode,
-        competitionAccount: getSavedCompetitionAccount() || undefined,
+        competitionAccount: savedComp || undefined,
       },
       (res: { success: boolean; roomCode?: string; message?: string; roomState?: RoomPublicState }) => {
         responded = true;
@@ -294,16 +330,19 @@ export default function App() {
       }
     }, 7000);
 
+    const savedComp = getSavedCompetitionAccount();
+    const activePlayerName = savedComp?.displayName || savedComp?.username || profile.name;
+
     socket.emit(
       'ROOM_JOIN',
       {
         roomCode: code,
         playerId: profile.id,
-        playerName: profile.name,
+        playerName: activePlayerName,
         playerAvatar: profile.avatar,
         reconnectToken: profile.reconnectToken,
         initialScore: profile.score,
-        competitionAccount: getSavedCompetitionAccount() || undefined,
+        competitionAccount: savedComp || undefined,
       },
       (res: { success: boolean; roomCode?: string; message?: string; roomState?: RoomPublicState }) => {
         responded = true;
@@ -391,6 +430,7 @@ export default function App() {
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
           onAdjustScore={handleAdjustScore}
+          onUpdateProfile={handleProfileComplete}
         />
       )}
 

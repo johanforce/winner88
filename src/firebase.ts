@@ -438,6 +438,7 @@ export async function recordRankedMatchResult(record: {
   movesCount: number;
   durationSeconds: number;
 }): Promise<RankedMatchRecord> {
+  await seedPresetAccountsIfNotExist();
   const redAcc = await getCompetitionAccount(record.redUsername);
   const blackAcc = await getCompetitionAccount(record.blackUsername);
 
@@ -548,4 +549,31 @@ export async function getLeaderboard(): Promise<CompetitionAccount[]> {
     handleFirestoreError(err, OperationType.LIST, 'competition_accounts');
     return [];
   }
+}
+
+export interface PlayerRankStats {
+  rank: number;
+  total: number;
+  elo: number;
+  displayName: string;
+}
+
+// Fetch map of username -> rank / total / elo
+export async function getLeaderboardRankMap(): Promise<Map<string, PlayerRankStats>> {
+  const map = new Map<string, PlayerRankStats>();
+  try {
+    const list = await getLeaderboard();
+    const total = Math.max(list.length, 9);
+    list.forEach((acc, idx) => {
+      map.set(acc.username.toLowerCase(), {
+        rank: idx + 1,
+        total,
+        elo: acc.elo,
+        displayName: acc.displayName || acc.username,
+      });
+    });
+  } catch (err) {
+    console.error('Error fetching leaderboard rank map:', err);
+  }
+  return map;
 }

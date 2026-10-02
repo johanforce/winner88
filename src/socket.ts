@@ -44,6 +44,19 @@ export function getOrCreatePlayerProfile(): PlayerProfile {
     // fallback
   }
 
+  // Nếu đã đăng nhập tài khoản thi đấu, luôn ưu tiên sử dụng tên của tài khoản thi đấu
+  try {
+    const rawComp = localStorage.getItem('winner88_competition_account');
+    if (rawComp) {
+      const parsedComp = JSON.parse(rawComp);
+      if (parsedComp.displayName || parsedComp.username) {
+        cachedName = parsedComp.displayName || parsedComp.username;
+      }
+    }
+  } catch {
+    // fallback
+  }
+
   // 2. Đọc session ID của tab hiện tại từ sessionStorage
   // Giúp mỗi tab trình duyệt có một ID độc lập, có thể mở 2 tab cùng test chơi với nhau mà không bị đè session!
   let tabId = '';
@@ -176,13 +189,18 @@ export function saveCompetitionAccount(account: SavedCompetitionAccount | null, 
       sessionStorage.removeItem(COMPETITION_ACCOUNT_KEY);
       return;
     }
-    if (remember) {
-      localStorage.setItem(COMPETITION_ACCOUNT_KEY, JSON.stringify(account));
-      localStorage.setItem(REMEMBER_ACCOUNT_KEY, 'true');
-    } else {
-      localStorage.removeItem(COMPETITION_ACCOUNT_KEY);
-      localStorage.removeItem(REMEMBER_ACCOUNT_KEY);
-      sessionStorage.setItem(COMPETITION_ACCOUNT_KEY, JSON.stringify(account));
+    // Luôn lưu vĩnh viễn vào localStorage để chỉ cần đăng nhập 1 lần duy nhất
+    localStorage.setItem(COMPETITION_ACCOUNT_KEY, JSON.stringify(account));
+    localStorage.setItem(REMEMBER_ACCOUNT_KEY, 'true');
+    sessionStorage.setItem(COMPETITION_ACCOUNT_KEY, JSON.stringify(account));
+
+    // Đồng bộ tên thi đấu vào profile người chơi
+    const chosenName = account.displayName || account.username;
+    if (chosenName) {
+      const rawLocal = localStorage.getItem(PROFILE_KEY);
+      const parsed = rawLocal ? JSON.parse(rawLocal) : {};
+      parsed.name = chosenName;
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(parsed));
     }
   } catch {
     // ignore
@@ -190,9 +208,7 @@ export function saveCompetitionAccount(account: SavedCompetitionAccount | null, 
 }
 
 export function getRememberAccountPreference(): boolean {
-  if (typeof window === 'undefined') return true;
-  const val = localStorage.getItem(REMEMBER_ACCOUNT_KEY);
-  return val === null ? true : val === 'true';
+  return true;
 }
 
 const CLIENT_DEVICE_SESSION_KEY = 'winner88_client_device_session_id';
@@ -200,14 +216,16 @@ const CLIENT_DEVICE_SESSION_KEY = 'winner88_client_device_session_id';
 export function getClientSessionId(): string {
   if (typeof window === 'undefined') return 'sess_server';
   try {
-    let sess = sessionStorage.getItem(CLIENT_DEVICE_SESSION_KEY);
+    // Lưu vĩnh viễn trong localStorage để cùng một trình duyệt không bị coi là 2 thiết bị khác nhau khi refresh/mở lại tab
+    let sess = localStorage.getItem(CLIENT_DEVICE_SESSION_KEY) || sessionStorage.getItem(CLIENT_DEVICE_SESSION_KEY);
     if (!sess) {
-      sess = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+      sess = 'dev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+      localStorage.setItem(CLIENT_DEVICE_SESSION_KEY, sess);
       sessionStorage.setItem(CLIENT_DEVICE_SESSION_KEY, sess);
     }
     return sess;
   } catch {
-    return 'sess_' + Math.random().toString(36).substring(2, 9);
+    return 'dev_' + Math.random().toString(36).substring(2, 9);
   }
 }
 

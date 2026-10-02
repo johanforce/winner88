@@ -181,7 +181,8 @@ export class GameRoom {
     const existingPlayer = this.players.find((p) => p.id === id);
     if (existingPlayer) {
       this.markPlayerActive(id, socketId);
-      existingPlayer.name = name;
+      const compName = competitionAccount?.displayName || competitionAccount?.username;
+      existingPlayer.name = compName || name;
       existingPlayer.avatar = avatar;
       if (competitionAccount) {
         existingPlayer.competitionUsername = competitionAccount.username;
@@ -226,10 +227,13 @@ export class GameRoom {
             : [2, 3, 4, 5, 6, 7];
         const spectatorSeat = spectatorSlots.find((s) => !takenSeats.has(s)) ?? this.players.length;
 
+        const compName = competitionAccount?.displayName || competitionAccount?.username;
+        const finalName = compName || name;
+
         const newSpectator: Player = {
           id,
           socketId,
-          name,
+          name: finalName,
           avatar,
           isHost: false,
           status: 'PLAYING',
@@ -258,7 +262,7 @@ export class GameRoom {
         } else if (this.rule === 'CO_VUA' && this.chessState && !this.chessState.spectatorIds.includes(id)) {
           this.chessState.spectatorIds.push(id);
         }
-        this.addSystemChat(`${name} đã vào phòng.`);
+        this.addSystemChat(`${finalName} đã vào phòng.`);
         this.onStateChange();
         return { success: true };
       }
@@ -341,10 +345,13 @@ export class GameRoom {
       }
     }
 
+    const compName = competitionAccount?.displayName || competitionAccount?.username;
+    const finalName = compName || name;
+
     const newPlayer: Player = {
       id,
       socketId,
-      name,
+      name: finalName,
       avatar,
       isHost,
       status: 'WAITING',
@@ -365,7 +372,7 @@ export class GameRoom {
     };
 
     this.players.push(newPlayer);
-    this.addSystemChat(`${name} đã vào phòng.`);
+    this.addSystemChat(`${finalName} đã vào phòng.`);
     this.onStateChange();
     return { success: true };
   }
@@ -790,12 +797,23 @@ export class GameRoom {
         };
       }
 
+      const isStandard = this.xiangqiTimeMode === 'STANDARD';
+      const isRanked = this.xiangqiTimeMode === 'RANKED' || !this.xiangqiTimeMode;
+
+      if (isRanked && (!redPlayer.competitionUsername || !blackPlayer.competitionUsername)) {
+        const missing: string[] = [];
+        if (!redPlayer.competitionUsername) missing.push(`Kỳ thủ Đỏ (${redPlayer.name})`);
+        if (!blackPlayer.competitionUsername) missing.push(`Kỳ thủ Đen (${blackPlayer.name})`);
+        return {
+          success: false,
+          message: `Trận Cờ Tướng Xếp Hạng yêu cầu cả hai kỳ thủ phải đăng nhập tài khoản thi đấu! Chưa đăng nhập: ${missing.join(', ')}.`,
+        };
+      }
+
       this.gameNumber += 1;
       this.status = 'PLAYING';
       this.results = undefined;
 
-      const isStandard = this.xiangqiTimeMode === 'STANDARD';
-      const isRanked = this.xiangqiTimeMode === 'RANKED' || !this.xiangqiTimeMode;
       let initialSeconds = 1800; // 30 mins (Ranked)
       let incrementSeconds = 0; // No increment
       if (isStandard) {
@@ -1720,7 +1738,13 @@ export class GameRoom {
   }
 
   private async handleRankedMatchCompletion() {
-    if (this.rule !== 'CO_TUONG' || this.xiangqiTimeMode !== 'RANKED' || !this.xiangqiState) {
+    const isRanked =
+      this.rule === 'CO_TUONG' &&
+      (this.xiangqiTimeMode === 'RANKED' ||
+        this.xiangqiState?.timeMode === 'RANKED' ||
+        !this.xiangqiTimeMode);
+
+    if (!isRanked || !this.xiangqiState) {
       return;
     }
 
@@ -1731,6 +1755,10 @@ export class GameRoom {
     const blackUsername = blackPlayer?.competitionUsername || this.xiangqiState.blackUsername;
 
     if (!redUsername || !blackUsername) {
+      console.warn('[handleRankedMatchCompletion] Ranked match missing usernames:', {
+        redUsername,
+        blackUsername,
+      });
       return;
     }
 

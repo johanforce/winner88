@@ -332,7 +332,7 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                   </div>
                 </div>
                 <div className="bg-stone-950/50 p-2.5 rounded-lg border border-stone-800 text-xs">
-                  <strong className="text-rose-400">Tốt (兵 / 卒):</strong> Chưa qua sông chỉ đi thẳng 1 bước; sau khi qua sông có thể đi thẳng hoặc đi ngang 1 bước. Không bao giờ được đi lùi!
+                  <strong className="text-rose-400">Binh / Tốt (兵 / 卒):</strong> Chưa qua sông chỉ đi thẳng 1 bước; sau khi qua sông có thể đi thẳng hoặc đi ngang 1 bước. Không bao giờ được đi lùi!
                 </div>
               </div>
 
@@ -344,21 +344,7 @@ export const RuleGuideModal: React.FC<RuleGuideModalProps> = ({
                   &bull; <strong>Chiếu bí / Hết nước đi:</strong> Kỳ thủ đối phương bị chiếu mà không còn đường đỡ, hoặc không còn nước đi hợp lệ &rarr; Thắng trận (+100 xu).<br />
                   &bull; <strong>Hết giờ (Timeout):</strong> Kim đồng hồ về 0 &rarr; Xử thua ngay lập tức (-100 xu).<br />
                   &bull; <strong>Đầu hàng:</strong> Có thể xin đầu hàng bất kỳ lúc nào nếu cảm thấy thế cờ không thể cứu vãn.<br />
-                  &bull; <strong>Xin hòa cờ:</strong> Kỳ thủ có thể bấm &quot;Xin hòa&quot;. Nếu đối phương đồng ý, trận đấu kết thúc với kết quả hòa (không trừ xu).<br />
-                  &bull; <strong>Luật hòa lặp nước đi:</strong> Hai bên đi lại nước đi qua lại lặp lại quá 3 lần liên tục &rarr; Tự động xử Hòa cờ (tam chiếu tam thoái / lặp thế cờ).
-                </p>
-              </div>
-
-              {/* TÍNH NĂNG CỜ THẾ (SIMULATOR) */}
-              <div className="bg-amber-950/40 border border-amber-500/50 p-3.5 rounded-xl space-y-1.5">
-                <h3 className="font-bold text-amber-300 flex items-center gap-1.5">
-                  <span>🧩 Tính Năng Cờ Thế (Simulator) & Tự Xếp Cờ Giải</span>
-                </h3>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  &bull; <strong>Tự do dàn xếp quân cờ:</strong> Bạn có thể tùy ý đặt bất kỳ quân cờ nào lên bàn cờ 9x10 để nghiên cứu các thế cờ tàn cuộc, thế cờ giang hồ hoặc bài tập chiếu bí.<br />
-                  &bull; <strong>Kho thế cờ kinh điển:</strong> Tích hợp sẵn các thế cờ nổi danh như <em>Thất Tinh Tụ Hội, Dã Mã Thao Điền, Mã Điếu Ngư, Trắc Diện Hổ, Pháo Trùng Chiếu Bí, Đơn Xe Thắng Song Sĩ...</em><br />
-                  &bull; <strong>Chế độ giải linh hoạt:</strong> Tự đi cả 2 bên để thử nghiệm các biến cờ, hoặc bật chế độ <strong>Đấu với Máy AI</strong> để máy tự động đỡ nước.<br />
-                  &bull; <strong>Công cụ hỗ trợ:</strong> Có nút <em>Gợi ý nước đi (AI Hint)</em>, <em>Hoàn tác (Undo)</em>, <em>Làm lại từ đầu</em> và xuất/nhập chuỗi <em>FEN</em> chuẩn quốc tế.
+                  &bull; <strong>Xin hòa cờ:</strong> Kỳ thủ có thể bấm &quot;Xin hòa&quot;. Nếu đối phương đồng ý, trận đấu kết thúc với kết quả hòa (không trừ xu).
                 </p>
               </div>
             </>

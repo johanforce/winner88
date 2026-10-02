@@ -45,6 +45,7 @@ import { RuleGuideModal } from './RuleGuideModal';
 import { XiangqiSimulator } from './XiangqiSimulator';
 import { RankedLeaderboardModal } from './RankedLeaderboardModal';
 import { RankedMatchHistoryModal } from './RankedMatchHistoryModal';
+import { getLeaderboardRankMap, PlayerRankStats } from '../firebase';
 import {
   getPieceAt,
   getLegalMoves,
@@ -98,6 +99,47 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   const [activeTab, setActiveTab] = useState<'MOVES' | 'SPECTATORS' | 'CHAT'>('MOVES');
   const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Leaderboard rank & Elo stats mapping
+  const [rankMap, setRankMap] = useState<Map<string, PlayerRankStats>>(new Map());
+
+  useEffect(() => {
+    getLeaderboardRankMap().then((m) => setRankMap(m));
+    if (xiangqi?.winnerSide) {
+      const t = setTimeout(() => {
+        getLeaderboardRankMap().then((m) => setRankMap(m));
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [roomState.gameNumber, xiangqi?.winnerSide, xiangqi?.redElo, xiangqi?.blackElo]);
+
+  const renderRankBadge = (player?: PlayerPublicInfo, fallbackSide?: 'RED' | 'BLACK') => {
+    const username =
+      player?.competitionUsername ||
+      (fallbackSide === 'RED' ? xiangqi?.redUsername : xiangqi?.blackUsername);
+    const stats = username ? rankMap.get(username.toLowerCase()) : null;
+    const elo =
+      stats?.elo ??
+      player?.competitionElo ??
+      (fallbackSide === 'RED' ? xiangqi?.redElo : xiangqi?.blackElo);
+
+    if (elo === undefined && !stats) return null;
+
+    const rank = stats?.rank;
+    const total = stats?.total ?? 9;
+
+    return (
+      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-lg font-mono font-bold inline-flex items-center gap-1.5 shadow-sm">
+        <span className="flex items-center gap-0.5">
+          <Trophy className="w-3 h-3 text-amber-400 shrink-0 inline" />
+          <span>{elo ?? 1300} Elo</span>
+        </span>
+        <span className="text-amber-400 font-sans font-extrabold bg-amber-950/70 px-1.5 py-0.2 rounded border border-amber-500/30 whitespace-nowrap">
+          {rank ? `Hạng ${rank}/${total}` : `Hạng ?/${total}`}
+        </span>
+      </span>
+    );
+  };
 
   // Secret AI Assistant (Sunfish Xiangqi Engine) activated via "lickmyball", deactivated via "sonofbitch"
   const [isAiHintActive, setIsAiHintActive] = useState<boolean>(false);
@@ -628,11 +670,7 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                       <span className="font-extrabold text-sm text-stone-100">
                         {opp?.name || (oppSide === 'RED' ? 'Kỳ thủ Đỏ' : 'Kỳ thủ Đen')}
                       </span>
-                      {opp?.competitionElo !== undefined && (
-                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-1.5 py-0.5 rounded font-mono font-bold">
-                          🏆 {opp.competitionElo} Elo
-                        </span>
-                      )}
+                      {renderRankBadge(opp, oppSide)}
                       <span
                         className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
                           oppSide === 'RED'
@@ -1054,11 +1092,7 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                           Bạn
                         </span>
                       )}
-                      {mePlayer?.competitionElo !== undefined && (
-                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-1.5 py-0.5 rounded font-mono font-bold">
-                          🏆 {mePlayer.competitionElo} Elo
-                        </span>
-                      )}
+                      {renderRankBadge(mePlayer, myCurrentSide)}
                       <span
                         className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
                           myCurrentSide === 'RED'
@@ -1694,12 +1728,10 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 >
                   <span className="text-2xl block mb-1">{redPlayer?.avatar || '🔴'}</span>
                   <strong className="block text-sm text-white">{redPlayer?.name || 'Đỏ'}</strong>
-                  {redPlayer?.competitionElo !== undefined && (
-                    <span className="text-[10px] text-amber-400 font-mono font-bold block mt-0.5">
-                      🏆 Elo: {redPlayer.competitionElo}
-                    </span>
-                  )}
-                  <span className="text-[10px] block mt-0.5">Kỳ thủ Đỏ</span>
+                  <div className="mt-1 flex justify-center">
+                    {renderRankBadge(redPlayer, 'RED')}
+                  </div>
+                  <span className="text-[10px] block mt-1">Kỳ thủ Đỏ</span>
                   <span
                     className={`font-black text-xs block mt-1 ${
                       xiangqi.winnerSide === 'RED' ? 'text-emerald-400' : 'text-rose-400'
@@ -1718,12 +1750,10 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 >
                   <span className="text-2xl block mb-1">{blackPlayer?.avatar || '⚫'}</span>
                   <strong className="block text-sm text-white">{blackPlayer?.name || 'Đen'}</strong>
-                  {blackPlayer?.competitionElo !== undefined && (
-                    <span className="text-[10px] text-amber-400 font-mono font-bold block mt-0.5">
-                      🏆 Elo: {blackPlayer.competitionElo}
-                    </span>
-                  )}
-                  <span className="text-[10px] block mt-0.5">Kỳ thủ Đen</span>
+                  <div className="mt-1 flex justify-center">
+                    {renderRankBadge(blackPlayer, 'BLACK')}
+                  </div>
+                  <span className="text-[10px] block mt-1">Kỳ thủ Đen</span>
                   <span
                     className={`font-black text-xs block mt-1 ${
                       xiangqi.winnerSide === 'BLACK' ? 'text-emerald-400' : 'text-rose-400'

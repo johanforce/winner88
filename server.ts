@@ -21,12 +21,6 @@ async function startServer() {
       methods: ['GET', 'POST'],
     },
     transports: ['websocket', 'polling'],
-    pingTimeout: 60000,
-    pingInterval: 25000,
-    connectionStateRecovery: {
-      maxDisconnectionDuration: 2 * 60 * 1000,
-      skipMiddlewares: true,
-    },
   });
 
   const roomManager = new RoomManager();

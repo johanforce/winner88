@@ -1,5 +1,5 @@
 import { XiangqiPiece, XiangqiSide } from '../types';
-import { getLegalMoves, generateMoveNotation } from './xiangqiLogic';
+import { getLegalMoves, generateMoveNotation } from '../../server/xiangqiLogic';
 
 export interface XiangqiAiHint {
   piece: XiangqiPiece;
@@ -43,7 +43,7 @@ export function findBestXiangqiMove(
       }
       // Prioritize advancing pieces toward center
       score += Math.abs(move.x - 4) * -2;
-      const notation = generateMoveNotation(piece, move, targetPiece, pieces);
+      const notation = generateMoveNotation(piece, move, targetPiece);
       candidates.push({
         piece,
         from: { x: piece.x, y: piece.y },

@@ -26,6 +26,7 @@ import { XiangqiSimulator } from './XiangqiSimulator';
 import { RankedLoginModal } from './RankedLoginModal';
 import { RankedLeaderboardModal } from './RankedLeaderboardModal';
 import { RankedMatchHistoryModal } from './RankedMatchHistoryModal';
+import { getLeaderboardRankMap, PlayerRankStats } from '../firebase';
 
 interface LobbyProps {
   playerName: string;
@@ -35,6 +36,7 @@ interface LobbyProps {
   onCreateRoom: (rule: GameRule, xiangqiTimeMode?: XiangqiTimeMode) => void;
   onJoinRoom: (roomCode: string) => void;
   onAdjustScore?: (delta: number) => void;
+  onUpdateProfile?: (name: string, avatar: string) => void;
 }
 
 export const Lobby: React.FC<LobbyProps> = ({
@@ -45,6 +47,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   onCreateRoom,
   onJoinRoom,
   onAdjustScore,
+  onUpdateProfile,
 }) => {
   const [rooms, setRooms] = useState<RoomListItem[]>([]);
   const [filterRule, setFilterRule] = useState<GameRule | 'ALL'>('ALL');
@@ -62,6 +65,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   const [competitionAccount, setCompetitionAccount] = useState<SavedCompetitionAccount | null>(() =>
     getSavedCompetitionAccount()
   );
+  const [rankMap, setRankMap] = useState<Map<string, PlayerRankStats>>(new Map());
   const [isRankedLoginOpen, setIsRankedLoginOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -70,6 +74,10 @@ export const Lobby: React.FC<LobbyProps> = ({
     | { type: 'JOIN'; roomCode: string }
     | null
   >(null);
+
+  useEffect(() => {
+    getLeaderboardRankMap().then(setRankMap);
+  }, []);
 
   const feedbackTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -180,6 +188,11 @@ export const Lobby: React.FC<LobbyProps> = ({
 
   const handleRankedLoginSuccess = (account: SavedCompetitionAccount) => {
     setCompetitionAccount(account);
+    const chosenName = account.displayName || account.username;
+    if (chosenName && onUpdateProfile) {
+      onUpdateProfile(chosenName, playerAvatar);
+    }
+    getLeaderboardRankMap().then(setRankMap);
     if (pendingAction) {
       if (pendingAction.type === 'CREATE') {
         setIsCreateModalOpen(false);
@@ -239,7 +252,11 @@ export const Lobby: React.FC<LobbyProps> = ({
             <Trophy className="w-4 h-4 text-amber-400" />
             <span className="hidden sm:inline">
               {competitionAccount
-                ? `${competitionAccount.displayName} (${competitionAccount.elo} Elo)`
+                ? (() => {
+                    const stats = rankMap.get(competitionAccount.username.toLowerCase());
+                    const rankText = stats?.rank ? ` • Hạng ${stats.rank}/${stats.total}` : '';
+                    return `${competitionAccount.displayName} (${competitionAccount.elo} Elo${rankText})`;
+                  })()
                 : 'Cờ Xếp Hạng'}
             </span>
           </button>
