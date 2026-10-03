@@ -2,18 +2,17 @@ import React, { useState, useEffect } from 'react';
 import {
   X,
   History,
-  RefreshCw,
-  Search,
   Trophy,
+  RefreshCw,
   Clock,
   Swords,
-  ChevronRight,
-  Shield,
-  Calendar,
+  CheckCircle,
+  AlertTriangle,
+  MinusCircle,
 } from 'lucide-react';
 import { getRankedMatches, RankedMatchRecord } from '../firebase';
 
-interface RankedMatchHistoryModalProps {
+export interface RankedMatchHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenLeaderboard?: () => void;
@@ -25,291 +24,215 @@ export const RankedMatchHistoryModal: React.FC<RankedMatchHistoryModalProps> = (
   onOpenLeaderboard,
 }) => {
   const [matches, setMatches] = useState<RankedMatchRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const fetchMatches = async () => {
-    setIsLoading(true);
+  const loadMatches = async () => {
+    setLoading(true);
     try {
-      const data = await getRankedMatches(100);
+      const data = await getRankedMatches(50);
       setMatches(data);
     } catch (err) {
-      console.error('Error fetching match history:', err);
+      console.error('Error fetching ranked matches:', err);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     if (isOpen) {
-      fetchMatches();
+      loadMatches();
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const formatDate = (timestamp: number) => {
-    const d = new Date(timestamp);
-    return d.toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const formatDuration = (seconds?: number) => {
-    if (!seconds) return '—';
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}m ${s < 10 ? '0' : ''}${s}s`;
-  };
-
   const getReasonLabel = (reason: string) => {
     switch (reason) {
       case 'CHECKMATE':
-        return 'Chiếu Bí';
+        return 'Chiếu bí';
       case 'TIMEOUT':
-        return 'Hết Giờ';
+        return 'Hết giờ';
       case 'RESIGN':
-        return 'Đầu Hàng';
+        return 'Xin hàng';
       case 'STALEMATE':
-        return 'Bức Tử';
+        return 'Hết nước đi';
       case 'AGREED_DRAW':
-        return 'Hòa Thỏa Thuận';
+        return 'Hòa thỏa thuận';
       case 'REPETITION':
-        return 'Hòa Lặp Nước';
+        return 'Hòa lặp nước';
       default:
         return reason;
     }
   };
 
-  const filteredMatches = matches.filter((m) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      m.redUsername.toLowerCase().includes(q) ||
-      m.redPlayerName.toLowerCase().includes(q) ||
-      m.blackUsername.toLowerCase().includes(q) ||
-      m.blackPlayerName.toLowerCase().includes(q) ||
-      m.roomCode.toLowerCase().includes(q)
-    );
-  });
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-emerald-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-stone-900 border border-sky-600/50 w-full max-w-2xl rounded-2xl p-6 shadow-2xl space-y-4 text-stone-100 relative flex flex-col max-h-[85vh]">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 text-stone-400 hover:text-white p-1 rounded-lg hover:bg-stone-800 transition cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
         {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-emerald-950/90 via-slate-900 to-teal-950/90 border-b border-emerald-500/30 flex items-center justify-between shrink-0">
+        <div className="flex items-center justify-between pr-8">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 shadow-inner">
-              <History className="w-5 h-5 text-emerald-400" />
+            <div className="w-11 h-11 rounded-xl bg-sky-500/20 border border-sky-500/50 flex items-center justify-center text-sky-400">
+              <History className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-black text-white tracking-wide flex items-center gap-2">
-                Lịch Sử Trận Đấu Cờ Tướng Xếp Hạng
-              </h2>
-              <p className="text-[11px] text-emerald-300/80 font-medium">
-                Lưu trữ tất cả các trận đấu, biến động Elo & kết quả chi tiết
-              </p>
+              <h2 className="text-lg font-black text-sky-400">Lịch Sử Trận Đấu Xếp Hạng</h2>
+              <p className="text-xs text-stone-400">Chi tiết kết quả thi đấu & biến động điểm Elo</p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={fetchMatches}
-              disabled={isLoading}
-              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer disabled:opacity-50"
-              title="Làm mới lịch sử"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-emerald-400' : ''}`} />
-            </button>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={loadMatches}
+            disabled={loading}
+            className="p-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl transition cursor-pointer disabled:opacity-50"
+            title="Làm mới"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
-        {/* Filter bar */}
-        <div className="px-6 py-3 bg-slate-950/60 border-b border-slate-800 flex items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm theo tên kỳ thủ hoặc mã phòng..."
-              className="w-full pl-9 pr-3 py-1.5 bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-xl text-white text-xs outline-none"
-            />
-          </div>
-          <span className="text-xs text-slate-400 whitespace-nowrap">
-            {filteredMatches.length} trận đấu
-          </span>
+        {/* Actions Bar */}
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-stone-400">Hiển thị {matches.length} trận đấu gần nhất</span>
+          {onOpenLeaderboard && (
+            <button
+              type="button"
+              onClick={onOpenLeaderboard}
+              className="px-3.5 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-400 font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5"
+            >
+              <Trophy className="w-3.5 h-3.5" />
+              Xem Bảng Phong Thần
+            </button>
+          )}
         </div>
 
-        {/* Matches list */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-3">
-          {isLoading && matches.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-xs">
-              <RefreshCw className="w-6 h-6 mx-auto mb-2 animate-spin text-emerald-400" />
-              <span>Đang tải lịch sử ván đấu...</span>
-            </div>
-          ) : filteredMatches.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 text-xs bg-slate-900/40 rounded-2xl border border-slate-800">
-              <History className="w-8 h-8 mx-auto mb-2 text-slate-600" />
-              <p className="font-bold text-white text-sm">Chưa có trận đấu xếp hạng nào</p>
-              <p className="text-[11px] mt-1 text-slate-500">
-                Hãy vào phòng Cờ Tướng Xếp Hạng để bắt đầu thi đấu tích lũy Elo!
-              </p>
-            </div>
+        {/* Matches List */}
+        <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 custom-scrollbar min-h-[300px]">
+          {loading && matches.length === 0 ? (
+            <div className="text-center py-12 text-stone-400 text-sm">Đang tải lịch sử đấu...</div>
+          ) : matches.length === 0 ? (
+            <div className="text-center py-12 text-stone-400 text-sm">Chưa có trận đấu xếp hạng nào</div>
           ) : (
-            filteredMatches.map((match) => {
-              const isRedWin = match.winnerSide === 'RED';
-              const isBlackWin = match.winnerSide === 'BLACK';
-              const isDraw = match.winnerSide === 'DRAW';
+            matches.map((m) => {
+              const dateStr = new Date(m.playedAt).toLocaleString('vi-VN', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+
+              const isRedWin = m.winnerSide === 'RED';
+              const isBlackWin = m.winnerSide === 'BLACK';
+              const isDraw = m.winnerSide === 'DRAW';
+
+              const redDeltaStr = m.redEloDelta >= 0 ? `+${m.redEloDelta}` : `${m.redEloDelta}`;
+              const blackDeltaStr = m.blackEloDelta >= 0 ? `+${m.blackEloDelta}` : `${m.blackEloDelta}`;
 
               return (
                 <div
-                  key={match.matchId}
-                  className="bg-slate-900/80 border border-slate-800 hover:border-slate-700 p-4 rounded-2xl transition shadow-sm space-y-3"
+                  key={m.matchId}
+                  className="p-3.5 bg-stone-950/80 border border-stone-800 rounded-xl hover:border-stone-700 transition space-y-2.5"
                 >
-                  {/* Top info row */}
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 border-b border-slate-800/80 pb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-amber-400 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                        {match.roomCode}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {formatDate(match.playedAt)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-1 text-slate-300">
-                        <Clock className="w-3.5 h-3.5 text-slate-500" />
-                        {formatDuration(match.durationSeconds)} ({match.movesCount || 0} nước)
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                          isDraw
-                            ? 'bg-amber-950/60 text-amber-300 border border-amber-600/40'
-                            : 'bg-emerald-950/60 text-emerald-300 border border-emerald-600/40'
-                        }`}
-                      >
-                        {getReasonLabel(match.winReason)}
-                      </span>
-                    </div>
+                  <div className="flex items-center justify-between text-[11px] text-stone-400 border-b border-stone-800/80 pb-1.5">
+                    <span className="font-mono text-stone-300">Phòng: {m.roomCode}</span>
+                    <span className="flex items-center gap-1 text-stone-400">
+                      <Clock className="w-3 h-3" />
+                      {dateStr} ({Math.round(m.durationSeconds / 60)} phút • {m.movesCount} nước)
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-stone-800 text-stone-300 font-bold text-[10px]">
+                      {getReasonLabel(m.winReason)}
+                    </span>
                   </div>
 
-                  {/* Players duel matchup row */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-                    {/* RED Player */}
+                  <div className="grid grid-cols-2 gap-3 items-center">
+                    {/* Red player */}
                     <div
-                      className={`p-3 rounded-xl border flex items-center justify-between ${
+                      className={`p-2 rounded-lg border ${
                         isRedWin
-                          ? 'bg-red-950/40 border-red-500/60 shadow-sm'
-                          : 'bg-slate-950/60 border-slate-800/80'
+                          ? 'bg-red-950/30 border-red-700/60'
+                          : isDraw
+                          ? 'bg-stone-900 border-stone-800'
+                          : 'bg-stone-900/60 border-stone-800/60 opacity-80'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-red-600 text-white font-bold text-xs flex items-center justify-center shadow">
-                          Đỏ
-                        </div>
-                        <div>
-                          <div className="font-bold text-xs text-white flex items-center gap-1.5">
-                            <span>{match.redPlayerName}</span>
-                            {isRedWin && <span className="text-[10px] text-amber-400 font-black">👑 THẮNG</span>}
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            @{match.redUsername}
-                          </div>
-                        </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-red-400 truncate">
+                          🔴 {m.redPlayerName}
+                        </span>
+                        {isRedWin && (
+                          <span className="text-[10px] font-black px-1.5 py-0.5 bg-red-900/60 text-red-300 rounded">
+                            THẮNG
+                          </span>
+                        )}
+                        {isDraw && (
+                          <span className="text-[10px] font-bold text-stone-400">HÒA</span>
+                        )}
                       </div>
-
-                      <div className="text-right">
-                        <div className="text-xs font-black text-white">
-                          {match.redEloAfter}
-                        </div>
-                        <div
-                          className={`text-[10px] font-bold ${
-                            match.redEloDelta > 0
+                      <div className="flex items-center justify-between mt-1 text-[11px]">
+                        <span className="text-stone-400">{m.redEloBefore} → {m.redEloAfter}</span>
+                        <span
+                          className={`font-black ${
+                            m.redEloDelta > 0
                               ? 'text-emerald-400'
-                              : match.redEloDelta < 0
+                              : m.redEloDelta < 0
                               ? 'text-rose-400'
-                              : 'text-slate-400'
+                              : 'text-stone-400'
                           }`}
                         >
-                          {match.redEloDelta > 0 ? `+${match.redEloDelta}` : match.redEloDelta}
-                        </div>
+                          {redDeltaStr}
+                        </span>
                       </div>
                     </div>
 
-                    {/* BLACK Player */}
+                    {/* Black player */}
                     <div
-                      className={`p-3 rounded-xl border flex items-center justify-between ${
+                      className={`p-2 rounded-lg border ${
                         isBlackWin
-                          ? 'bg-slate-800/60 border-slate-600/60 shadow-sm'
-                          : 'bg-slate-950/60 border-slate-800/80'
+                          ? 'bg-amber-950/30 border-amber-700/60'
+                          : isDraw
+                          ? 'bg-stone-900 border-stone-800'
+                          : 'bg-stone-900/60 border-stone-800/60 opacity-80'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-600 text-white font-bold text-xs flex items-center justify-center shadow">
-                          Đen
-                        </div>
-                        <div>
-                          <div className="font-bold text-xs text-white flex items-center gap-1.5">
-                            <span>{match.blackPlayerName}</span>
-                            {isBlackWin && <span className="text-[10px] text-amber-400 font-black">👑 THẮNG</span>}
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono">
-                            @{match.blackUsername}
-                          </div>
-                        </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-stone-200 truncate">
+                          ⚫ {m.blackPlayerName}
+                        </span>
+                        {isBlackWin && (
+                          <span className="text-[10px] font-black px-1.5 py-0.5 bg-amber-900/60 text-amber-300 rounded">
+                            THẮNG
+                          </span>
+                        )}
+                        {isDraw && (
+                          <span className="text-[10px] font-bold text-stone-400">HÒA</span>
+                        )}
                       </div>
-
-                      <div className="text-right">
-                        <div className="text-xs font-black text-white">
-                          {match.blackEloAfter}
-                        </div>
-                        <div
-                          className={`text-[10px] font-bold ${
-                            match.blackEloDelta > 0
+                      <div className="flex items-center justify-between mt-1 text-[11px]">
+                        <span className="text-stone-400">{m.blackEloBefore} → {m.blackEloAfter}</span>
+                        <span
+                          className={`font-black ${
+                            m.blackEloDelta > 0
                               ? 'text-emerald-400'
-                              : match.blackEloDelta < 0
+                              : m.blackEloDelta < 0
                               ? 'text-rose-400'
-                              : 'text-slate-400'
+                              : 'text-stone-400'
                           }`}
                         >
-                          {match.blackEloDelta > 0 ? `+${match.blackEloDelta}` : match.blackEloDelta}
-                        </div>
+                          {blackDeltaStr}
+                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
               );
             })
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-3.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 shrink-0">
-          <span>Tổng số {matches.length} ván đấu đã lưu trữ</span>
-          {onOpenLeaderboard && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenLeaderboard();
-              }}
-              className="text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer flex items-center gap-1"
-            >
-              <span>Xem Bảng Xếp Hạng Elo &rarr;</span>
-            </button>
           )}
         </div>
       </div>

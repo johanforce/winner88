@@ -208,6 +208,22 @@ export async function seedPresetAccountsIfNotExist(): Promise<CompetitionAccount
       handleFirestoreError(err, OperationType.GET, `competition_accounts/${preset.username}`);
     }
   }
+
+  // Khởi tạo mã reset session ẩn trên Firebase nếu chưa tồn tại
+  try {
+    const configRef = doc(db, 'system_config', 'session_settings');
+    const configSnap = await getDoc(configRef);
+    if (!configSnap.exists()) {
+      await setDoc(configRef, {
+        configId: 'session_settings',
+        resetSessionCode: DEFAULT_RESET_SESSION_CODE,
+        updatedAt: Date.now(),
+      });
+    }
+  } catch {
+    // ignore
+  }
+
   return accounts;
 }
 
@@ -257,14 +273,52 @@ export async function changeCompetitionAccountPassword(
   }
 }
 
+export interface SystemConfig {
+  configId: string;
+  resetSessionCode: string;
+  updatedAt?: number;
+}
+
+export const DEFAULT_RESET_SESSION_CODE = '_reset_session';
+
+// Lấy hoặc khởi tạo mã reset session ẩn trên Firebase Firestore
+export async function getResetSessionCode(): Promise<string> {
+  try {
+    const docRef = doc(db, 'system_config', 'session_settings');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      const data = snap.data() as SystemConfig;
+      if (data?.resetSessionCode) {
+        return data.resetSessionCode;
+      }
+    }
+    // Khởi tạo mã ẩn mặc định trên Firestore nếu chưa có
+    await setDoc(docRef, {
+      configId: 'session_settings',
+      resetSessionCode: DEFAULT_RESET_SESSION_CODE,
+      updatedAt: Date.now(),
+    });
+    return DEFAULT_RESET_SESSION_CODE;
+  } catch (err) {
+    console.warn('Lỗi đọc mã reset_session từ Firestore, sử dụng mặc định:', err);
+    return DEFAULT_RESET_SESSION_CODE;
+  }
+}
+
 // Single-session login handler:
-// Enforces that one account can only be logged in at ONE device/tab at a time.
-// If active on another device/tab (within 60s timeout), refuses login.
+// Cho phép đăng nhập tài khoản thi đấu.
+// Nếu tài khoản đang đăng nhập ở nơi khác, người dùng có thể nhập [mật_khẩu]_reset_session
+// để buộc đăng xuất thiết bị cũ và đăng nhập ngay vào máy hiện tại.
 export async function loginCompetitionAccount(
   username: string,
   passwordInput: string,
   clientSessionId: string
-): Promise<{ success: boolean; message?: string; account?: CompetitionAccount }> {
+): Promise<{
+  success: boolean;
+  message?: string;
+  account?: CompetitionAccount;
+  resetSessionTriggered?: boolean;
+}> {
   const clean = username.trim().toLowerCase();
   const docRef = doc(db, 'competition_accounts', clean);
   try {
@@ -274,15 +328,26 @@ export async function loginCompetitionAccount(
     }
 
     const acc = snap.data() as CompetitionAccount;
+    const now = Date.now();
+    const SESSION_TIMEOUT_MS = 60 * 1000; // 60s timeout cho phiên không hoạt động
 
-    if (acc.password !== passwordInput) {
+    // Lấy mã reset session ẩn được lưu trên Firebase
+    const resetCode = await getResetSessionCode();
+
+    // Kiểm tra mật khẩu bình thường hoặc mật khẩu kèm mã reset_session
+    // Ví dụ: thangnc1_reset_session hoặc thangnc1reset_session
+    const isNormalPassword = acc.password === passwordInput;
+    const isResetPassword =
+      passwordInput === acc.password + resetCode ||
+      (resetCode.startsWith('_') && passwordInput === acc.password + resetCode.substring(1)) ||
+      passwordInput === acc.password + '_reset_session' ||
+      passwordInput === acc.password + 'reset_session';
+
+    if (!isNormalPassword && !isResetPassword) {
       return { success: false, message: 'Mật khẩu không chính xác! (Mặc định: 1)' };
     }
 
-    const now = Date.now();
-    const SESSION_TIMEOUT_MS = 60 * 1000; // 60s timeout for stale disconnected sessions
-
-    // Check if account is logged in and active on another device or another tab
+    // Kiểm tra xem tài khoản có đang login ở thiết bị/tab khác không
     const isLoggedElsewhere =
       acc.isLoggedIn === true &&
       acc.activeSessionId &&
@@ -290,15 +355,18 @@ export async function loginCompetitionAccount(
       acc.lastActiveAt &&
       now - acc.lastActiveAt < SESSION_TIMEOUT_MS;
 
-    if (isLoggedElsewhere) {
+    // Nếu tài khoản đang login nơi khác và người dùng KHÔNG nhập mã reset session:
+    // Hướng dẫn nhập thêm mã _reset_session để chiếm quyền phiên
+    if (isLoggedElsewhere && !isResetPassword) {
       const elapsedSec = Math.max(1, Math.round((now - (acc.lastActiveAt || now)) / 1000));
       return {
         success: false,
-        message: `Tài khoản "${acc.displayName || acc.username}" đang đăng nhập ở một thiết bị hoặc tab khác (vừa hoạt động ${elapsedSec}s trước). Theo quy định, mỗi tài khoản chỉ được đăng nhập tại 1 nơi! Vui lòng đăng xuất ở thiết bị cũ trước.`,
+        message: `Tài khoản "${acc.displayName || acc.username}" đang đăng nhập ở một thiết bị khác (hoạt động ${elapsedSec}s trước). Để đăng xuất nơi khác và đăng nhập vào máy này, vui lòng nhập mật khẩu kèm mã reset: ví dụ [mật_khẩu]_reset_session`,
       };
     }
 
-    // Assign active session to this device/tab
+    // Nếu người dùng nhập mã reset session hoặc tài khoản không bị kẹt:
+    // Cập nhật session mới ngay lập tức trên Firestore, đá phiên cũ ra ngoài
     await updateDoc(docRef, {
       isLoggedIn: true,
       activeSessionId: clientSessionId,
@@ -313,7 +381,14 @@ export async function loginCompetitionAccount(
       lastActiveAt: now,
     });
 
-    return { success: true, account: updatedAcc };
+    return {
+      success: true,
+      account: updatedAcc,
+      resetSessionTriggered: isResetPassword,
+      message: isResetPassword
+        ? 'Đã đăng xuất tài khoản ở nơi khác và đăng nhập thành công vào máy này!'
+        : undefined,
+    };
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `competition_accounts/${clean}`);
     return { success: false, message: 'Lỗi máy chủ cơ sở dữ liệu khi đăng nhập!' };
@@ -400,6 +475,18 @@ export function calculateEloChanges(
 
   let redDelta = Math.round(K * (actualRed - expectedRed));
   let blackDelta = Math.round(K * (actualBlack - expectedBlack));
+
+  // Thưởng +1 Elo khi kỳ thủ quay trở lại từ unrank (1300)
+  if (redElo === 1300) {
+    if (winnerSide === 'RED' || winnerSide === 'DRAW') {
+      redDelta += 1;
+    }
+  }
+  if (blackElo === 1300) {
+    if (winnerSide === 'BLACK' || winnerSide === 'DRAW') {
+      blackDelta += 1;
+    }
+  }
 
   let newRedElo = redElo + redDelta;
   let newBlackElo = blackElo + blackDelta;
@@ -538,11 +625,27 @@ export async function getLeaderboard(): Promise<CompetitionAccount[]> {
     snap.forEach((d) => {
       accounts.push(applyInactivityDecay(d.data() as CompetitionAccount));
     });
-    // Sort descending by Elo, then by win rate / wins
+    // Sort: 1. Elo -> 2. Tỷ lệ thắng (Win rate) -> 3. Số trận thắng -> 4. Số trận hòa -> 5. Ít trận thua hơn
     accounts.sort((a, b) => {
+      // 1. So sánh Elo
       if (b.elo !== a.elo) return b.elo - a.elo;
+
+      // 2. So sánh tỷ lệ thắng (Win Rate = số trận thắng / tổng số trận)
+      const aWinRate = a.matchesPlayed > 0 ? a.wins / a.matchesPlayed : 0;
+      const bWinRate = b.matchesPlayed > 0 ? b.wins / b.matchesPlayed : 0;
+      if (Math.abs(bWinRate - aWinRate) > 0.00001) {
+        return bWinRate - aWinRate;
+      }
+
+      // 3. So sánh số trận thắng
       if (b.wins !== a.wins) return b.wins - a.wins;
-      return b.matchesPlayed - a.matchesPlayed;
+
+      // 4. So sánh số trận hòa
+      if (b.draws !== a.draws) return b.draws - a.draws;
+
+      // 5. Ưu tiên ít trận thua hơn, rồi theo tên username
+      if (a.losses !== b.losses) return a.losses - b.losses;
+      return a.username.localeCompare(b.username);
     });
     return accounts;
   } catch (err) {

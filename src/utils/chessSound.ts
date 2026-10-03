@@ -134,6 +134,27 @@ class ChessSoundEffects {
       // ignore
     }
   }
+
+  public playCountdownWarning(secondsLeft: number) {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const isUrgent = secondsLeft <= 3;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = isUrgent ? 'sawtooth' : 'triangle';
+      const freq = isUrgent ? 950 : secondsLeft <= 5 ? 850 : 720;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(0.28, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (isUrgent ? 0.15 : 0.11));
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + (isUrgent ? 0.16 : 0.12));
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export const chessSound = new ChessSoundEffects();

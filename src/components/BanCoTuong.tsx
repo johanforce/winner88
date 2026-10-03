@@ -30,6 +30,8 @@ import {
   Headphones,
   Copy,
   Check,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import {
   RoomPublicState,
@@ -56,6 +58,7 @@ import {
   reconstructBoardFromMoves,
 } from '../utils/xiangqiLogic';
 import { findBestXiangqiMove, XiangqiAiHint } from '../utils/xiangqiAi';
+import { chessSound } from '../utils/chessSound';
 
 interface BanCoTuongProps {
   roomState: RoomPublicState;
@@ -99,9 +102,49 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   const [activeTab, setActiveTab] = useState<'MOVES' | 'SPECTATORS' | 'CHAT'>('MOVES');
   const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isRespondingDraw, setIsRespondingDraw] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const lastWarningPlayedSecRef = useRef<number | null>(null);
 
   // Leaderboard rank & Elo stats mapping
   const [rankMap, setRankMap] = useState<Map<string, PlayerRankStats>>(new Map());
+
+  // Ranked mode 10s countdown warning sound effect
+  useEffect(() => {
+    if (!xiangqi || xiangqi.winnerSide) {
+      lastWarningPlayedSecRef.current = null;
+      return;
+    }
+
+    const isRanked = xiangqi.timeMode === 'RANKED' || roomState.xiangqiTimeMode === 'RANKED';
+    if (!isRanked) return;
+
+    const remaining = roomState?.turnTimeRemaining ?? xiangqi.moveTimeRemaining ?? 120;
+
+    // Reset ref when time is renewed (e.g. new move played > 10s)
+    if (remaining > 10) {
+      lastWarningPlayedSecRef.current = null;
+      return;
+    }
+
+    // Play warning sound every second from 10s down to 1s
+    if (remaining <= 10 && remaining >= 1) {
+      if (lastWarningPlayedSecRef.current !== remaining) {
+        lastWarningPlayedSecRef.current = remaining;
+        if (soundEnabled) {
+          chessSound.playCountdownWarning(remaining);
+        }
+      }
+    }
+  }, [
+    roomState?.turnTimeRemaining,
+    xiangqi?.moveTimeRemaining,
+    xiangqi?.currentSide,
+    xiangqi?.winnerSide,
+    soundEnabled,
+    roomState.xiangqiTimeMode,
+    xiangqi?.timeMode,
+  ]);
 
   useEffect(() => {
     getLeaderboardRankMap().then((m) => setRankMap(m));
@@ -346,11 +389,14 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   };
 
   const handleRespondDraw = (accept: boolean) => {
+    if (isRespondingDraw) return;
+    setIsRespondingDraw(true);
     setActionError(null);
     socket.emit(
       'GAME_XIANGQI_RESPOND_DRAW',
       { roomCode: roomState.code, playerId: myPlayerId, accept },
       (res: { success: boolean; message?: string }) => {
+        setIsRespondingDraw(false);
         if (!res.success) setActionError(res.message || 'Phản hồi thất bại');
       }
     );
@@ -416,7 +462,8 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
   const isRedInCheck = xiangqi?.isCheck && xiangqi.checkSide === 'RED';
   const isBlackInCheck = xiangqi?.isCheck && xiangqi.checkSide === 'BLACK';
 
-  const isStandardMode = xiangqi?.timeMode === 'STANDARD' || roomState.xiangqiTimeMode === 'STANDARD';
+  const isRanked = xiangqi?.timeMode === 'RANKED' || roomState.xiangqiTimeMode === 'RANKED';
+  const isStandardMode = !isRanked && (xiangqi?.timeMode === 'STANDARD' || roomState.xiangqiTimeMode === 'STANDARD');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-950 via-neutral-900 to-stone-950 text-stone-100 flex flex-col selection:bg-amber-600 selection:text-white font-sans">
@@ -431,7 +478,12 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
           </div>
 
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-amber-950/60 border border-amber-800 text-amber-300 text-xs font-bold rounded-xl">
-            {isStandardMode ? (
+            {isRanked ? (
+              <>
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span>Cờ Tướng Xếp Hạng (20p + 2p/nước)</span>
+              </>
+            ) : isStandardMode ? (
               <>
                 <Award className="w-3.5 h-3.5 text-amber-400" />
                 <span>Cờ Tiêu Chuẩn Quốc Tế (60p + 30s WXF)</span>
@@ -454,6 +506,19 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className={`p-2 border rounded-xl text-xs flex items-center justify-center transition cursor-pointer ${
+              soundEnabled
+                ? 'bg-stone-900 border-amber-500/50 text-amber-400 hover:bg-stone-800'
+                : 'bg-stone-900/60 border-stone-800 text-stone-500 hover:text-stone-300'
+            }`}
+            title={soundEnabled ? 'Đang bật âm thanh cảnh báo (bấm để tắt)' : 'Đã tắt âm thanh (bấm để bật)'}
+          >
+            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+
           <button
             type="button"
             onClick={() => setIsSimulatorOpen(true)}
@@ -688,33 +753,150 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 </div>
 
                 {/* Clock */}
-                <div className="flex flex-col items-end gap-1">
-                  <div
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
-                      isOppTurn
-                        ? isLowTime
-                          ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
-                          : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
-                        : 'bg-stone-950 border-stone-800 text-stone-400'
-                    }`}
-                  >
-                    <Clock className={`w-4 h-4 ${isOppTurn ? 'animate-spin' : ''}`} />
-                    <span>{formatTime(oppTime)}</span>
-                    {xiangqi?.incrementSeconds ? (
-                      <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
-                        +{xiangqi.incrementSeconds}s
-                      </span>
-                    ) : null}
+                {isRanked ? (
+                  <div className="flex flex-col items-end gap-1">
+                    {/* Big 2-Minute Move Countdown Clock */}
+                    {(() => {
+                      const moveTime = roomState?.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120;
+                      const isUnder30s = isOppTurn && moveTime <= 30;
+                      const isUnder10s = isOppTurn && moveTime <= 10;
+                      return (
+                        <>
+                          <div
+                            className={`flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-mono border-2 transition-all shadow-lg ${
+                              !isOppTurn
+                                ? 'bg-stone-950/80 border-stone-800 text-stone-500 opacity-60'
+                                : isUnder10s
+                                ? 'bg-red-600 border-red-300 text-white animate-pulse ring-4 ring-red-500/60 shadow-red-600/50 scale-105'
+                                : isUnder30s
+                                ? 'bg-rose-950/90 border-rose-500 text-rose-200 animate-pulse ring-2 ring-rose-500/50 shadow-rose-950/60'
+                                : 'bg-amber-950/90 border-amber-500 text-amber-300 ring-2 ring-amber-500/30 shadow-amber-950/40'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              {isUnder10s ? (
+                                <AlertTriangle className="w-5 h-5 text-yellow-300 animate-bounce" />
+                              ) : isUnder30s ? (
+                                <Clock className="w-5 h-5 text-rose-400 animate-pulse" />
+                              ) : (
+                                <Clock className={`w-4 h-4 sm:w-5 sm:h-5 ${isOppTurn ? 'text-amber-400 animate-spin' : 'text-stone-500'}`} />
+                              )}
+                              <div className="flex flex-col items-start leading-none">
+                                <span className="text-[9px] uppercase tracking-wider font-sans font-bold opacity-80">
+                                  {isUnder10s
+                                    ? '🚨 SẮP HẾT 2P'
+                                    : isUnder30s
+                                    ? '⚠️ NƯỚC ĐI (2P)'
+                                    : 'NƯỚC ĐI (2P)'}
+                                </span>
+                                <span className="text-xl sm:text-2xl font-black tracking-tight">
+                                  {formatTime(isOppTurn ? moveTime : 120)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Secondary total time */}
+                          <div className="text-[11px] font-mono text-stone-400 flex items-center gap-1 bg-stone-950/80 px-2.5 py-0.5 rounded-lg border border-stone-800">
+                            <span className="text-[9px] font-sans uppercase text-stone-500">Tổng ván:</span>
+                            <span className="font-bold text-stone-300">{formatTime(oppTime)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
-                  {xiangqi?.timeMode === 'RANKED' && isOppTurn && (
-                    <div className="text-[10px] text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-500/30">
-                      Nước đi: {formatTime(roomState?.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120)}
+                ) : (
+                  <div className="flex flex-col items-end gap-1">
+                    <div
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
+                        isOppTurn
+                          ? isLowTime
+                            ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
+                            : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
+                          : 'bg-stone-950 border-stone-800 text-stone-400'
+                      }`}
+                    >
+                      <Clock className={`w-4 h-4 ${isOppTurn ? 'animate-spin' : ''}`} />
+                      <span>{formatTime(oppTime)}</span>
+                      {xiangqi?.incrementSeconds ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
+                          +{xiangqi.incrementSeconds}s
+                        </span>
+                      ) : null}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })()}
+
+          {/* RANKED MATCH PROMINENT 2-MIN COUNTDOWN BANNER */}
+          {isRanked && !xiangqi?.winnerSide && (
+            (() => {
+              const currentMoveTime = roomState?.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120;
+              const isUnder30s = currentMoveTime <= 30;
+              const isUnder10s = currentMoveTime <= 10;
+              const activeSide = xiangqi?.currentSide;
+              const isMyMove = activeSide === mySide;
+              const activePlayerName = activeSide === 'RED'
+                ? (redPlayer?.name || 'Kỳ thủ Đỏ')
+                : (blackPlayer?.name || 'Kỳ thủ Đen');
+
+              return (
+                <div
+                  className={`w-full max-w-[560px] mb-2 px-3.5 sm:px-4 py-2.5 rounded-2xl border-2 flex items-center justify-between shadow-xl transition-all ${
+                    isUnder10s
+                      ? 'bg-gradient-to-r from-red-950 via-red-900 to-red-950 border-red-500 text-white animate-pulse shadow-red-900/60 ring-2 ring-red-500'
+                      : isUnder30s
+                      ? 'bg-gradient-to-r from-stone-950 via-rose-950/80 to-stone-950 border-rose-500 text-rose-200 animate-pulse shadow-rose-950/50'
+                      : 'bg-stone-900/95 border-amber-500/50 text-stone-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-xl sm:text-2xl">
+                      {activeSide === 'RED' ? '🔴' : '⚫'}
+                    </span>
+                    <div>
+                      <div className="text-xs sm:text-sm font-black flex items-center gap-2 flex-wrap">
+                        <span>
+                          {isMyMove ? '👉 LƯỢT ĐI CỦA BẠN' : `LƯỢT ${activeSide === 'RED' ? 'QUÂN ĐỎ' : 'QUÂN ĐEN'} (${activePlayerName})`}
+                        </span>
+                        {isUnder10s ? (
+                          <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-black rounded-full animate-bounce shadow">
+                            🚨 NGUY CẤP: CÒN {currentMoveTime}S!
+                          </span>
+                        ) : isUnder30s ? (
+                          <span className="px-2 py-0.5 bg-rose-600 text-white text-[10px] font-black rounded-full">
+                            ⚠️ SẮP HẾT 2 PHÚT
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-[11px] text-stone-400 mt-0.5">
+                        {isMyMove
+                          ? 'Mỗi nước đi có 2 phút suy nghĩ. Hãy đi quân trước khi hết giờ!'
+                          : 'Đang đợi đối phương suy nghĩ nước đi...'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Huge Countdown Display */}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl font-mono font-black text-2xl sm:text-3xl border-2 tracking-wider shadow-inner flex items-center gap-2 ${
+                        isUnder10s
+                          ? 'bg-red-600 border-red-300 text-white animate-pulse'
+                          : isUnder30s
+                          ? 'bg-rose-950 border-rose-400 text-rose-200'
+                          : 'bg-stone-950 border-amber-500/60 text-amber-300'
+                      }`}
+                    >
+                      <Clock className={`w-5 h-5 sm:w-6 sm:h-6 ${isUnder10s ? 'animate-bounce text-yellow-300' : 'animate-spin text-amber-400'}`} />
+                      <span>{formatTime(currentMoveTime)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          )}
 
           {/* ACTIVE REVIEWED MOVE RIBBON: Shows details when a specific move in history is selected */}
           {selectedMoveIndex !== null && xiangqi?.moveHistory && xiangqi.moveHistory[selectedMoveIndex] && (
@@ -1110,30 +1292,78 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 </div>
 
                 {/* Clock */}
-                <div className="flex flex-col items-end gap-1">
-                  <div
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
-                      isTurn
-                        ? isLowTime
-                          ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
-                          : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
-                        : 'bg-stone-950 border-stone-800 text-stone-400'
-                    }`}
-                  >
-                    <Clock className={`w-4 h-4 ${isTurn ? 'animate-spin' : ''}`} />
-                    <span>{formatTime(myTime)}</span>
-                    {xiangqi?.incrementSeconds ? (
-                      <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
-                        +{xiangqi.incrementSeconds}s
-                      </span>
-                    ) : null}
+                {isRanked ? (
+                  <div className="flex flex-col items-end gap-1">
+                    {/* Big 2-Minute Move Countdown Clock */}
+                    {(() => {
+                      const moveTime = roomState?.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120;
+                      const isUnder30s = isTurn && moveTime <= 30;
+                      const isUnder10s = isTurn && moveTime <= 10;
+                      return (
+                        <>
+                          <div
+                            className={`flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-mono border-2 transition-all shadow-lg ${
+                              !isTurn
+                                ? 'bg-stone-950/80 border-stone-800 text-stone-500 opacity-60'
+                                : isUnder10s
+                                ? 'bg-red-600 border-red-300 text-white animate-pulse ring-4 ring-red-500/60 shadow-red-600/50 scale-105'
+                                : isUnder30s
+                                ? 'bg-rose-950/90 border-rose-500 text-rose-200 animate-pulse ring-2 ring-rose-500/50 shadow-rose-950/60'
+                                : 'bg-amber-950/90 border-amber-500 text-amber-300 ring-2 ring-amber-500/30 shadow-amber-950/40'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              {isTurn && isUnder10s ? (
+                                <AlertTriangle className="w-5 h-5 text-yellow-300 animate-bounce" />
+                              ) : isTurn && isUnder30s ? (
+                                <Clock className="w-5 h-5 text-rose-400 animate-pulse" />
+                              ) : (
+                                <Clock className={`w-4 h-4 sm:w-5 sm:h-5 ${isTurn ? 'text-amber-400 animate-spin' : 'text-stone-500'}`} />
+                              )}
+                              <div className="flex flex-col items-start leading-none">
+                                <span className="text-[9px] uppercase tracking-wider font-sans font-bold opacity-80">
+                                  {isTurn && isUnder10s
+                                    ? '🚨 HẾT GIỜ (2P)!'
+                                    : isTurn && isUnder30s
+                                    ? '⚠️ NƯỚC ĐI (2P)'
+                                    : 'NƯỚC ĐI (2P)'}
+                                </span>
+                                <span className="text-xl sm:text-2xl font-black tracking-tight">
+                                  {formatTime(isTurn ? moveTime : 120)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Secondary total time */}
+                          <div className="text-[11px] font-mono text-stone-400 flex items-center gap-1 bg-stone-950/80 px-2.5 py-0.5 rounded-lg border border-stone-800">
+                            <span className="text-[9px] font-sans uppercase text-stone-500">Tổng ván:</span>
+                            <span className="font-bold text-stone-300">{formatTime(myTime)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
-                  {xiangqi?.timeMode === 'RANKED' && isTurn && (
-                    <div className="text-[10px] text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-500/30">
-                      Nước đi: {formatTime(roomState?.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120)}
+                ) : (
+                  <div className="flex flex-col items-end gap-1">
+                    <div
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
+                        isTurn
+                          ? isLowTime
+                            ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
+                            : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
+                          : 'bg-stone-950 border-stone-800 text-stone-400'
+                      }`}
+                    >
+                      <Clock className={`w-4 h-4 ${isTurn ? 'animate-spin' : ''}`} />
+                      <span>{formatTime(myTime)}</span>
+                      {xiangqi?.incrementSeconds ? (
+                        <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
+                          +{xiangqi.incrementSeconds}s
+                        </span>
+                      ) : null}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -1618,17 +1848,19 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
             <div className="flex gap-2">
               <button
                 type="button"
+                disabled={isRespondingDraw}
                 onClick={() => handleRespondDraw(false)}
-                className="flex-1 py-2.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs rounded-xl transition cursor-pointer"
+                className="flex-1 py-2.5 bg-stone-800 hover:bg-stone-700 disabled:opacity-50 text-stone-300 font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 Từ Chối
               </button>
               <button
                 type="button"
+                disabled={isRespondingDraw}
                 onClick={() => handleRespondDraw(true)}
-                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow transition cursor-pointer"
+                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow transition cursor-pointer"
               >
-                Đồng Ý Hòa
+                {isRespondingDraw ? 'Đang xử lý...' : 'Đồng Ý Hòa'}
               </button>
             </div>
           </div>

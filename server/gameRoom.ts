@@ -1744,9 +1744,12 @@ export class GameRoom {
         this.xiangqiState?.timeMode === 'RANKED' ||
         !this.xiangqiTimeMode);
 
-    if (!isRanked || !this.xiangqiState) {
+    if (!isRanked || !this.xiangqiState || this.xiangqiState.rankedMatchRecorded) {
       return;
     }
+
+    // Đánh dấu ngay lập tức để chống duplicate / race condition
+    this.xiangqiState.rankedMatchRecorded = true;
 
     const redPlayer = this.players.find((p) => p.id === this.xiangqiState?.redPlayerId);
     const blackPlayer = this.players.find((p) => p.id === this.xiangqiState?.blackPlayerId);
@@ -1995,8 +1998,8 @@ export class GameRoom {
   }
 
   public xiangqiRespondDraw(playerId: string, accept: boolean): { success: boolean; message?: string } {
-    if (!this.xiangqiState || !this.xiangqiState.drawOfferFrom) {
-      return { success: false, message: 'Không có lời xin hòa nào đang chờ' };
+    if (this.status !== 'PLAYING' || !this.xiangqiState || !this.xiangqiState.drawOfferFrom || this.xiangqiState.winnerSide) {
+      return { success: false, message: 'Không có lời xin hòa nào đang chờ hoặc trận đấu đã kết thúc' };
     }
 
     const isRed = playerId === this.xiangqiState.redPlayerId;
@@ -2008,6 +2011,7 @@ export class GameRoom {
     }
 
     const responder = this.players.find((p) => p.id === playerId);
+    this.xiangqiState.drawOfferFrom = null;
 
     if (accept) {
       this.stopTimer();
@@ -2021,7 +2025,6 @@ export class GameRoom {
       this.handleRankedMatchCompletion();
     } else {
       this.addSystemChat(`❌ Kỳ thủ ${responder?.name} đã TỪ CHỐI lời xin hòa. Trận đấu tiếp tục!`);
-      this.xiangqiState.drawOfferFrom = null;
     }
 
     this.onStateChange();

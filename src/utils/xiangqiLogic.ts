@@ -399,3 +399,35 @@ export function generateMoveNotation(
   }
   return text;
 }
+
+export function formatMoveHistoryToKyPho(moves: XiangqiMove[]): string {
+  if (!moves || moves.length === 0) return 'Chưa có nước đi nào.';
+  const lines: string[] = [];
+  for (let i = 0; i < moves.length; i += 2) {
+    const round = Math.floor(i / 2) + 1;
+    const redMove = moves[i]?.notation || '...';
+    const blackMove = moves[i + 1]?.notation || '';
+    lines.push(`${round}. ${redMove.padEnd(24, ' ')}${blackMove}`);
+  }
+  return lines.join('\n');
+}
+
+export function reconstructBoardFromMoves(moves: XiangqiMove[], untilIndex: number): XiangqiPiece[] {
+  let board = createInitialXiangqiPieces();
+  const limit = Math.min(moves.length, untilIndex + 1);
+  for (let i = 0; i < limit; i++) {
+    const move = moves[i];
+    if (!move) continue;
+    // Remove captured piece at destination
+    board = board.filter((p) => !(p.x === move.to.x && p.y === move.to.y));
+    // Move piece
+    board = board.map((p) => {
+      if (p.x === move.from.x && p.y === move.from.y) {
+        return { ...p, x: move.to.x, y: move.to.y };
+      }
+      return p;
+    });
+  }
+  return board;
+}
+
