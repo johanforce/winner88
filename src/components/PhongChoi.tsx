@@ -13,6 +13,7 @@ import {
   Flame,
   UserCheck,
   Award,
+  Trophy,
   MessageSquare,
   Anchor,
   Crosshair,
@@ -23,6 +24,14 @@ import { RoomPublicState, PlayerPublicInfo, ChatMessage } from '../types';
 import { socket } from '../socket';
 import { KhungChat } from './KhungChat';
 import { RuleGuideModal } from './RuleGuideModal';
+import { getLeaderboardRankMap, PlayerRankStats, CompetitionAccount } from '../firebase';
+import { RankedLoginModal } from './RankedLoginModal';
+import { RankedLeaderboardModal } from './RankedLeaderboardModal';
+import {
+  getSavedCompetitionAccount,
+  saveCompetitionAccount,
+  SavedCompetitionAccount,
+} from '../socket';
 
 interface PhongChoiProps {
   roomState: RoomPublicState;
@@ -41,15 +50,41 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<'SEATS' | 'CHAT'>('SEATS');
-  const [lastReadMessageCount, setLastReadMessageCount] = useState(chatMessages.length);
+  const safeChatMessages = Array.isArray(chatMessages) ? chatMessages : [];
+  const [lastReadMessageCount, setLastReadMessageCount] = useState(safeChatMessages.length);
 
   useEffect(() => {
     if (mobileTab === 'CHAT') {
-      setLastReadMessageCount(chatMessages.length);
+      setLastReadMessageCount(safeChatMessages.length);
     }
-  }, [mobileTab, chatMessages.length]);
+  }, [mobileTab, safeChatMessages.length]);
 
-  const unreadChatCount = mobileTab === 'CHAT' ? 0 : Math.max(0, chatMessages.length - lastReadMessageCount);
+  const unreadChatCount = mobileTab === 'CHAT' ? 0 : Math.max(0, safeChatMessages.length - lastReadMessageCount);
+
+  const [rankMap, setRankMap] = useState<Map<string, PlayerRankStats>>(new Map());
+  const [isRankedLoginOpen, setIsRankedLoginOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [competitionAccount, setCompetitionAccount] = useState<SavedCompetitionAccount | null>(() =>
+    getSavedCompetitionAccount()
+  );
+
+  useEffect(() => {
+    getLeaderboardRankMap().then(setRankMap);
+  }, [roomState.status, roomState.gameNumber]);
+
+  const handleRankedLoginSuccess = (account: SavedCompetitionAccount) => {
+    setCompetitionAccount(account);
+    socket.emit('ROOM_ATTACH_COMPETITION_ACCOUNT', {
+      roomCode: roomState.code,
+      playerId: myPlayerId,
+      competitionAccount: {
+        username: account.username,
+        displayName: account.displayName,
+        elo: account.elo,
+      },
+    });
+    getLeaderboardRankMap().then(setRankMap);
+  };
 
   const me = roomState.players.find((p) => p.id === myPlayerId);
   const isHost = me?.isHost || false;
@@ -64,9 +99,22 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
   // Slots representation: 0..3 for Card games, 0..5 for Chess (2 players + 4 spectators), 0..7 for other Board games
   const totalSlots = isCoVua ? 6 : isBoardGame ? 8 : 4;
   const seats: (PlayerPublicInfo | null)[] = Array(totalSlots).fill(null);
+  
+  // 1. Gán người chơi vào đúng vị trí ghế hợp lệ nếu ghế còn trống
   roomState.players.forEach((p) => {
-    if (typeof p.seatIndex === 'number' && p.seatIndex >= 0 && p.seatIndex < totalSlots) {
+    if (typeof p.seatIndex === 'number' && p.seatIndex >= 0 && p.seatIndex < totalSlots && !seats[p.seatIndex]) {
       seats[p.seatIndex] = p;
+    }
+  });
+
+  // 2. Dự phòng: Nếu có người chơi nào chưa được xếp vào ghế (do trùng seatIndex hoặc ngoài dải),
+  // xếp ngay vào ghế trống đầu tiên để TUYỆT ĐỐI KHÔNG BỊ ẨN NGƯỜI CHƠI
+  roomState.players.forEach((p) => {
+    if (!seats.includes(p)) {
+      const freeIdx = seats.findIndex((s) => s === null);
+      if (freeIdx !== -1) {
+        seats[freeIdx] = p;
+      }
     }
   });
 
@@ -148,7 +196,7 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
     );
   };
 
-  const handleSetXiangqiTimeMode = (timeMode: 'STANDARD' | 'BLITZ_5M') => {
+  const handleSetXiangqiTimeMode = (timeMode: 'STANDARD' | 'RANKED') => {
     setErrorMsg(null);
     socket.emit(
       'ROOM_SET_XIANGQI_TIME_MODE',
@@ -399,6 +447,24 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                       Bạn
                     </span>
                   )}
+                  {(() => {
+                    const stats = player.competitionUsername
+                      ? rankMap.get(player.competitionUsername.toLowerCase())
+                      : null;
+                    const elo = stats?.elo ?? player.competitionElo;
+                    if (elo === undefined && !stats) return null;
+                    const rank = stats?.rank;
+                    const total = stats?.total ?? 9;
+                    return (
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-1.5 py-0.5 rounded-lg font-mono font-bold inline-flex items-center gap-1 shadow-sm">
+                        <Trophy className="w-3 h-3 text-amber-400 inline" />
+                        <span>{elo ?? 1300} Elo</span>
+                        <span className="text-amber-400 font-sans font-extrabold bg-amber-950/70 px-1 py-0.2 rounded border border-amber-500/30 whitespace-nowrap">
+                          {rank ? `Hạng ${rank}/${total}` : `Hạng ?/${total}`}
+                        </span>
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="text-xs text-amber-400 font-semibold mt-0.5">
                   {player.score} xu
@@ -515,6 +581,40 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {isCoTuong && (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsLeaderboardOpen(true)}
+                id="btn-open-leaderboard-phongchoi"
+                className="px-2.5 sm:px-3 py-1.5 bg-amber-950/60 hover:bg-amber-900 border border-amber-500/60 rounded-xl text-xs font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+                title="Xem Bảng Xếp Hạng Cờ Tướng"
+              >
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden xs:inline">Bảng Xếp Hạng</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsRankedLoginOpen(true)}
+                id="btn-open-ranked-account-phongchoi"
+                className={`px-2.5 sm:px-3 py-1.5 border rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  me?.competitionUsername || competitionAccount
+                    ? 'bg-slate-900 hover:bg-slate-800 border-amber-500/60 text-amber-300'
+                    : 'bg-red-950/70 hover:bg-red-900 border-red-600 text-red-200 animate-pulse'
+                }`}
+                title="Tài khoản thi đấu Cờ Tướng Xếp Hạng"
+              >
+                <Award className="w-3.5 h-3.5 text-amber-400" />
+                <span>
+                  {me?.competitionUsername || competitionAccount
+                    ? `${me?.competitionDisplayName || competitionAccount?.displayName || me?.competitionUsername || competitionAccount?.username} (${me?.competitionElo ?? competitionAccount?.elo ?? 1300} Elo)`
+                    : 'Đăng Nhập Xếp Hạng'}
+                </span>
+              </button>
+            </>
+          )}
+
           <button
             onClick={() => setIsRuleModalOpen(true)}
             id="btn-open-rules"
@@ -647,8 +747,8 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                   </div>
                   <p className="text-xs text-slate-300 mt-1">
                     {roomState.xiangqiTimeMode === 'STANDARD'
-                      ? '🏆 Cờ Tiêu Chuẩn Quốc Tế: 60 phút mỗi bên + 30 giây tích lũy cho mỗi nước đi (theo chuẩn Liên Đoàn Cờ Tướng Quốc Tế WXF).'
-                      : '⚡ Cờ Chớp: 5 phút mỗi bên + 3 giây tích lũy cho mỗi nước đi.'}
+                      ? '🏆 Cờ Tiêu Chuẩn Quốc Tế: 60 phút mỗi bên + 30 giây tích lũy cho mỗi nước đi (theo chuẩn WXF).'
+                      : '🏆 Cờ Tướng Xếp Hạng: 30 phút mỗi bên không cộng thêm, 2 phút tối đa/nước đi, tính điểm Elo quốc tế.'}
                   </p>
                 </div>
 
@@ -656,42 +756,42 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                   <div className="flex items-center gap-2 shrink-0 bg-slate-950 p-1 rounded-xl border border-slate-800">
                     <button
                       type="button"
+                      id="btn-time-mode-ranked"
+                      onClick={() => handleSetXiangqiTimeMode('RANKED')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        roomState.xiangqiTimeMode !== 'STANDARD'
+                          ? 'bg-amber-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Trophy className="w-3.5 h-3.5" />
+                      <span>Cờ Xếp Hạng (30p, 2p/nước)</span>
+                    </button>
+                    <button
+                      type="button"
                       id="btn-time-mode-standard"
                       onClick={() => handleSetXiangqiTimeMode('STANDARD')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                         roomState.xiangqiTimeMode === 'STANDARD'
-                          ? 'bg-amber-600 text-white shadow'
+                          ? 'bg-red-700 text-white shadow'
                           : 'text-slate-400 hover:text-white'
                       }`}
                     >
                       <Award className="w-3.5 h-3.5" />
                       <span>Cờ Tiêu Chuẩn (60p + 30s)</span>
                     </button>
-                    <button
-                      type="button"
-                      id="btn-time-mode-blitz"
-                      onClick={() => handleSetXiangqiTimeMode('BLITZ_5M')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                        roomState.xiangqiTimeMode !== 'STANDARD'
-                          ? 'bg-red-700 text-white shadow'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <Flame className="w-3.5 h-3.5" />
-                      <span>Cờ Chớp (5p + 3s)</span>
-                    </button>
                   </div>
                 ) : (
                   <div className="shrink-0">
                     {roomState.xiangqiTimeMode === 'STANDARD' ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/60 border border-amber-800 text-amber-300 text-xs font-bold rounded-xl">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-950/60 border border-red-800 text-red-300 text-xs font-bold rounded-xl">
                         <Award className="w-3.5 h-3.5" />
                         <span>Cờ Tiêu Chuẩn (60p + 30s WXF)</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-950/60 border border-red-800 text-red-300 text-xs font-bold rounded-xl">
-                        <Flame className="w-3.5 h-3.5" />
-                        <span>Cờ Chớp (5p + 3s)</span>
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/60 border border-amber-800 text-amber-300 text-xs font-bold rounded-xl">
+                        <Trophy className="w-3.5 h-3.5" />
+                        <span>Cờ Xếp Hạng (30p, 2p/nước)</span>
                       </span>
                     )}
                   </div>
@@ -875,7 +975,11 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
                     : isCaro
                     ? 'Bắt Đầu Trận Cờ Caro'
                     : isCoTuong
-                    ? 'Bắt Đầu Trận Cờ Chớp'
+                    ? roomState.xiangqiTimeMode === 'STANDARD'
+                      ? 'Bắt Đầu Cờ Tiêu Chuẩn'
+                      : roomState.xiangqiTimeMode === 'BLITZ_5M'
+                      ? 'Bắt Đầu Cờ Chớp 5P'
+                      : 'Bắt Đầu Cờ Xếp Hạng (Elo)'
                     : 'Bắt Đầu Ván Chơi'}
                 </span>
               </button>
@@ -886,9 +990,11 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
         {/* Right Side: Chat */}
         <div className={`w-full lg:w-80 xl:w-[340px] shrink-0 h-[480px] lg:h-[520px] ${mobileTab === 'CHAT' ? 'block' : 'hidden lg:block'}`}>
           <KhungChat
-            chatMessages={chatMessages}
-            myPlayerId={myPlayerId}
             roomCode={roomState.code}
+            playerId={myPlayerId}
+            myPlayerId={myPlayerId}
+            messages={safeChatMessages}
+            chatMessages={safeChatMessages}
           />
         </div>
       </main>
@@ -898,6 +1004,23 @@ export const PhongChoi: React.FC<PhongChoiProps> = ({
         isOpen={isRuleModalOpen}
         onClose={() => setIsRuleModalOpen(false)}
         initialRule={roomState.rule}
+      />
+
+      {/* Ranked Login Modal */}
+      <RankedLoginModal
+        isOpen={isRankedLoginOpen}
+        onClose={() => setIsRankedLoginOpen(false)}
+        onLoginSuccess={handleRankedLoginSuccess}
+        onOpenLeaderboard={() => {
+          setIsRankedLoginOpen(false);
+          setIsLeaderboardOpen(true);
+        }}
+      />
+
+      {/* Ranked Leaderboard Modal */}
+      <RankedLeaderboardModal
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
       />
     </div>
   );

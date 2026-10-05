@@ -56,7 +56,6 @@ import {
   reconstructBoardFromMoves,
 } from '../utils/xiangqiLogic';
 import { findBestXiangqiMove, XiangqiAiHint } from '../utils/xiangqiAi';
-import { chessSound } from '../utils/chessSound';
 
 interface BanCoTuongProps {
   roomState: RoomPublicState;
@@ -113,73 +112,6 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
       return () => clearTimeout(t);
     }
   }, [roomState.gameNumber, xiangqi?.winnerSide, xiangqi?.redElo, xiangqi?.blackElo]);
-
-  const isRanked =
-    roomState.rule === 'CO_TUONG' &&
-    (xiangqi?.timeMode === 'RANKED' || !xiangqi?.timeMode || roomState.xiangqiTimeMode === 'RANKED');
-
-  const turnMoveTime = roomState.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120;
-  const isMoveLowTime = isRanked && turnMoveTime <= 30;
-  const isMoveCriticalTime = isRanked && turnMoveTime <= 10;
-
-  // Sound warning when <= 10s: cảnh báo âm thanh mỗi giây khi còn 10s trở xuống
-  const lastWarningBeepRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!isRanked || roomState.status !== 'PLAYING' || xiangqi?.winnerSide) {
-      lastWarningBeepRef.current = null;
-      return;
-    }
-
-    if (turnMoveTime > 10) {
-      lastWarningBeepRef.current = null;
-      return;
-    }
-
-    if (turnMoveTime <= 10 && turnMoveTime > 0) {
-      if (lastWarningBeepRef.current !== turnMoveTime) {
-        lastWarningBeepRef.current = turnMoveTime;
-        // Urgent higher pitch beep when <= 5 seconds
-        chessSound.playWarning(turnMoveTime <= 5);
-      }
-    }
-  }, [
-    turnMoveTime,
-    isRanked,
-    roomState.status,
-    xiangqi?.winnerSide,
-    xiangqi?.currentSide,
-  ]);
-
-  // Âm thanh khi nước đi được thực hiện / ăn quân / chiếu tướng
-  const prevMoveCountRef = useRef(xiangqi?.moveHistory?.length || 0);
-  useEffect(() => {
-    const currentCount = xiangqi?.moveHistory?.length || 0;
-    if (currentCount > prevMoveCountRef.current) {
-      const lastMove = xiangqi?.moveHistory?.[currentCount - 1];
-      if (lastMove) {
-        if (lastMove.isCheck) {
-          chessSound.playCheck();
-        } else if (lastMove.capturedPiece) {
-          chessSound.playCapture();
-        } else {
-          chessSound.playMove();
-        }
-      }
-    }
-    prevMoveCountRef.current = currentCount;
-  }, [xiangqi?.moveHistory?.length]);
-
-  // Âm thanh khi ván cờ kết thúc
-  useEffect(() => {
-    if (xiangqi?.winnerSide) {
-      if (xiangqi.winReason === 'TIMEOUT') {
-        chessSound.playTimeout();
-      } else if (xiangqi.winnerSide === mySide) {
-        chessSound.playWin();
-      }
-    }
-  }, [xiangqi?.winnerSide, xiangqi?.winReason, mySide]);
 
   const renderRankBadge = (player?: PlayerPublicInfo, fallbackSide?: 'RED' | 'BLACK') => {
     const username =
@@ -756,86 +688,30 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 </div>
 
                 {/* Clock */}
-                {isRanked ? (
-                  <div className="flex flex-col items-end gap-1">
-                    {/* Big 2-Minute Move Countdown */}
-                    <div
-                      className={`flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl font-mono border transition-all ${
-                        isOppTurn
-                          ? isMoveCriticalTime
-                            ? 'bg-red-950/95 border-2 border-red-500 text-white shadow-xl shadow-red-900/60 ring-4 ring-red-500/60 animate-pulse'
-                            : isMoveLowTime
-                            ? 'bg-rose-950/90 border-2 border-rose-500 text-rose-200 shadow-lg shadow-rose-950/50 ring-2 ring-rose-500/40 animate-pulse'
-                            : 'bg-amber-950/90 border border-amber-500 text-amber-300 ring-2 ring-amber-500/20 shadow-md'
-                          : 'bg-stone-950/80 border border-stone-800 text-stone-500 opacity-75'
-                      }`}
-                    >
-                      {isOppTurn && isMoveCriticalTime ? (
-                        <AlertTriangle className="w-5 h-5 text-red-400 animate-bounce shrink-0" />
-                      ) : (
-                        <Clock
-                          className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${
-                            isOppTurn
-                              ? isMoveLowTime
-                                ? 'text-red-400 animate-spin'
-                                : 'text-amber-400 animate-spin'
-                              : 'text-stone-500'
-                          }`}
-                        />
-                      )}
-                      <div className="flex flex-col items-end leading-none">
-                        <span
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${
-                            isOppTurn
-                              ? isMoveCriticalTime
-                                ? 'text-red-300'
-                                : isMoveLowTime
-                                ? 'text-rose-300'
-                                : 'text-amber-400/90'
-                              : 'text-stone-500'
-                          }`}
-                        >
-                          {isOppTurn
-                            ? isMoveCriticalTime
-                              ? '🚨 Sắp hết 2p'
-                              : isMoveLowTime
-                              ? '⚠️ Nước đi'
-                              : 'Đếm ngược 2p'
-                            : 'Chờ lượt'}
-                        </span>
-                        <span className="text-xl sm:text-2xl font-black font-mono tracking-wider mt-0.5">
-                          {formatTime(isOppTurn ? turnMoveTime : 120)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Total Game Bank */}
-                    <div className="text-[11px] font-mono text-stone-400 flex items-center gap-1">
-                      <span>Tổng ván:</span>
-                      <span className="font-bold text-stone-300">{formatTime(oppTime)}</span>
-                    </div>
+                <div className="flex flex-col items-end gap-1">
+                  <div
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
+                      isOppTurn
+                        ? isLowTime
+                          ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
+                          : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    }`}
+                  >
+                    <Clock className={`w-4 h-4 ${isOppTurn ? 'animate-spin' : ''}`} />
+                    <span>{formatTime(oppTime)}</span>
+                    {xiangqi?.incrementSeconds ? (
+                      <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
+                        +{xiangqi.incrementSeconds}s
+                      </span>
+                    ) : null}
                   </div>
-                ) : (
-                  <div className="flex flex-col items-end gap-1">
-                    <div
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
-                        isOppTurn
-                          ? isLowTime
-                            ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
-                            : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
-                          : 'bg-stone-950 border-stone-800 text-stone-400'
-                      }`}
-                    >
-                      <Clock className={`w-4 h-4 ${isOppTurn ? 'animate-spin' : ''}`} />
-                      <span>{formatTime(oppTime)}</span>
-                      {xiangqi?.incrementSeconds ? (
-                        <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
-                          +{xiangqi.incrementSeconds}s
-                        </span>
-                      ) : null}
+                  {xiangqi?.timeMode === 'RANKED' && isOppTurn && (
+                    <div className="text-[10px] text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-500/30">
+                      Nước đi: {formatTime(roomState?.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120)}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             );
           })()}
@@ -896,38 +772,6 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 >
                   Về tàn cuộc ✕
                 </button>
-              </div>
-            </div>
-          )}
-
-          {/* Prominent Low Time Warning Banner for 30s & 10s */}
-          {isRanked && roomState.status === 'PLAYING' && !xiangqi?.winnerSide && isMoveLowTime && (
-            <div
-              className={`w-full max-w-[560px] mb-2 px-3.5 py-2 rounded-xl flex items-center justify-between border-2 transition-all shadow-xl animate-pulse ${
-                isMoveCriticalTime
-                  ? 'bg-red-950/95 border-red-500 text-white ring-4 ring-red-500/60 shadow-red-950/80'
-                  : 'bg-rose-950/90 border-rose-500 text-rose-100 ring-2 ring-rose-500/40 shadow-rose-950/50'
-              }`}
-            >
-              <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
-                <AlertTriangle
-                  className={`w-5 h-5 text-red-400 shrink-0 ${
-                    isMoveCriticalTime ? 'animate-bounce' : ''
-                  }`}
-                />
-                <div className="leading-tight">
-                  <span className="font-extrabold text-amber-300">
-                    {isMyTurn ? 'LƯỢT BẠN ĐI: ' : `LƯỢT ${xiangqi?.currentSide === 'RED' ? 'ĐỎ' : 'ĐEN'}: `}
-                  </span>
-                  <span>
-                    {isMoveCriticalTime
-                      ? '🚨 Dưới 10 giây! Hết 2 phút sẽ xử THUA!'
-                      : '⚠️ Sắp hết 2 phút suy nghĩ cho nước này!'}
-                  </span>
-                </div>
-              </div>
-              <div className="font-mono text-xl sm:text-2xl font-black tracking-widest text-amber-300 bg-black/70 px-3 py-0.5 rounded-lg border border-amber-500/50 shadow-inner shrink-0">
-                {formatTime(turnMoveTime)}
               </div>
             </div>
           )}
@@ -1266,86 +1110,30 @@ export const BanCoTuong: React.FC<BanCoTuongProps> = ({
                 </div>
 
                 {/* Clock */}
-                {isRanked ? (
-                  <div className="flex flex-col items-end gap-1">
-                    {/* Big 2-Minute Move Countdown */}
-                    <div
-                      className={`flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl font-mono border transition-all ${
-                        isTurn
-                          ? isMoveCriticalTime
-                            ? 'bg-red-950/95 border-2 border-red-500 text-white shadow-xl shadow-red-900/60 ring-4 ring-red-500/60 animate-pulse'
-                            : isMoveLowTime
-                            ? 'bg-rose-950/90 border-2 border-rose-500 text-rose-200 shadow-lg shadow-rose-950/50 ring-2 ring-rose-500/40 animate-pulse'
-                            : 'bg-amber-950/90 border border-amber-500 text-amber-300 ring-2 ring-amber-500/20 shadow-md'
-                          : 'bg-stone-950/80 border border-stone-800 text-stone-500 opacity-75'
-                      }`}
-                    >
-                      {isTurn && isMoveCriticalTime ? (
-                        <AlertTriangle className="w-5 h-5 text-red-400 animate-bounce shrink-0" />
-                      ) : (
-                        <Clock
-                          className={`w-4 h-4 sm:w-5 sm:h-5 shrink-0 ${
-                            isTurn
-                              ? isMoveLowTime
-                                ? 'text-red-400 animate-spin'
-                                : 'text-amber-400 animate-spin'
-                              : 'text-stone-500'
-                          }`}
-                        />
-                      )}
-                      <div className="flex flex-col items-end leading-none">
-                        <span
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${
-                            isTurn
-                              ? isMoveCriticalTime
-                                ? 'text-red-300'
-                                : isMoveLowTime
-                                ? 'text-rose-300'
-                                : 'text-amber-400/90'
-                              : 'text-stone-500'
-                          }`}
-                        >
-                          {isTurn
-                            ? isMoveCriticalTime
-                              ? '🚨 Sắp hết 2p'
-                              : isMoveLowTime
-                              ? '⚠️ Nước đi'
-                              : 'Đếm ngược 2p'
-                            : 'Chờ lượt'}
-                        </span>
-                        <span className="text-xl sm:text-2xl font-black font-mono tracking-wider mt-0.5">
-                          {formatTime(isTurn ? turnMoveTime : 120)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Total Game Bank */}
-                    <div className="text-[11px] font-mono text-stone-400 flex items-center gap-1">
-                      <span>Tổng ván:</span>
-                      <span className="font-bold text-stone-300">{formatTime(myTime)}</span>
-                    </div>
+                <div className="flex flex-col items-end gap-1">
+                  <div
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
+                      isTurn
+                        ? isLowTime
+                          ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
+                          : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    }`}
+                  >
+                    <Clock className={`w-4 h-4 ${isTurn ? 'animate-spin' : ''}`} />
+                    <span>{formatTime(myTime)}</span>
+                    {xiangqi?.incrementSeconds ? (
+                      <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
+                        +{xiangqi.incrementSeconds}s
+                      </span>
+                    ) : null}
                   </div>
-                ) : (
-                  <div className="flex flex-col items-end gap-1">
-                    <div
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-mono text-base font-black border transition-all ${
-                        isTurn
-                          ? isLowTime
-                            ? 'bg-rose-950/80 border-rose-500 text-rose-300 animate-pulse'
-                            : 'bg-amber-950/80 border-amber-500 text-amber-300 ring-2 ring-amber-500/20'
-                          : 'bg-stone-950 border-stone-800 text-stone-400'
-                      }`}
-                    >
-                      <Clock className={`w-4 h-4 ${isTurn ? 'animate-spin' : ''}`} />
-                      <span>{formatTime(myTime)}</span>
-                      {xiangqi?.incrementSeconds ? (
-                        <span className="text-[10px] text-emerald-400 font-semibold opacity-90">
-                          +{xiangqi.incrementSeconds}s
-                        </span>
-                      ) : null}
+                  {xiangqi?.timeMode === 'RANKED' && isTurn && (
+                    <div className="text-[10px] text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-500/30">
+                      Nước đi: {formatTime(roomState?.turnTimeRemaining ?? xiangqi?.moveTimeRemaining ?? 120)}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             );
           })()}
