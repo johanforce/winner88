@@ -155,6 +155,28 @@
         }
       },
       "required": ["matchId", "redUsername", "blackUsername", "winnerSide", "winReason", "playedAt"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Cấu hình hệ thống lưu trữ mã reset session ẩn",
+      "type": "object",
+      "properties": {
+        "configId": {
+          "type": "string",
+          "description": "Mã định danh cấu hình",
+          "maxLength": 64
+        },
+        "resetSessionCode": {
+          "type": "string",
+          "description": "Mã code ẩn để đăng nhập và reset phiên từ xa",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Thời điểm cập nhật gần nhất"
+        }
+      },
+      "required": ["configId", "resetSessionCode"]
     }
   },
   "firestore": {
@@ -165,6 +187,10 @@
     "/ranked_matches/{matchId}": {
       "schema": "RankedMatch",
       "description": "Lịch sử các ván đấu cờ tướng xếp hạng"
+    },
+    "/system_config/{configId}": {
+      "schema": "SystemConfig",
+      "description": "Cấu hình hệ thống bao gồm mã ẩn reset session"
     }
   }
 }
