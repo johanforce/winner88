@@ -5,7 +5,6 @@ interface HorsePawnProps {
   horse: CaNguaHorse;
   selectable?: boolean;
   isMoving?: boolean;
-  inStable?: boolean;
   onClick?: () => void;
 }
 
