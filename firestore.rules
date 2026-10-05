@@ -25,26 +25,36 @@ service cloud.firestore {
         && request.resource.data.wins is number
         && request.resource.data.draws is number
         && request.resource.data.losses is number;
-      allow delete: if false;
+      allow delete: if isValidId(username);
     }
 
     // Lịch sử trận đấu cờ tướng xếp hạng
     match /ranked_matches/{matchId} {
       allow get: if isValidId(matchId);
       allow list: if true;
-      allow create: if isValidId(matchId)
+      allow create, update: if isValidId(matchId)
         && request.resource.data.matchId is string
         && request.resource.data.matchId == matchId
         && request.resource.data.redUsername is string
         && request.resource.data.blackUsername is string
         && request.resource.data.winnerSide in ['RED', 'BLACK', 'DRAW']
         && request.resource.data.playedAt is number;
-      allow update, delete: if false;
+      allow delete: if isValidId(matchId);
     }
 
     // Test connection doc
     match /test/connection {
       allow read: if true;
+    }
+
+    // Cấu hình hệ thống (mã ẩn reset session)
+    match /system_config/{configId} {
+      allow get: if isValidId(configId);
+      allow list: if true;
+      allow create, update: if isValidId(configId)
+        && request.resource.data.configId is string
+        && request.resource.data.resetSessionCode is string;
+      allow delete: if false;
     }
   }
 }

@@ -12,6 +12,7 @@ import {
   orderBy,
   limit,
   getDocFromServer,
+  onSnapshot,
 } from 'firebase/firestore';
 import firebaseConfig from './firebase-applet-config.json';
 
@@ -126,7 +127,7 @@ export const PRESET_ACCOUNTS: Array<{ username: string; displayName: string }> =
   { username: 'duonghq', displayName: 'Dương HQ' },
   { username: 'anhnh', displayName: 'Ánh NH' },
   { username: 'tienlv', displayName: 'Tiến LV' },
-  { username: 'ducnt', displayName: 'Đức NT' },
+  { username: 'anhnt', displayName: 'Anh NT08' },
 ];
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -168,8 +169,93 @@ export function applyInactivityDecay(acc: CompetitionAccount): CompetitionAccoun
   };
 }
 
-// Ensure the 9 preset accounts exist in Firestore
+// Fetch all competition accounts directly from Firestore
+export async function getCompetitionAccounts(): Promise<CompetitionAccount[]> {
+  try {
+    const snap = await getDocs(collection(db, 'competition_accounts'));
+    const accounts: CompetitionAccount[] = [];
+    snap.forEach((d) => {
+      const raw = d.data() as CompetitionAccount;
+      accounts.push(
+        applyInactivityDecay({
+          ...raw,
+          username: raw.username || d.id,
+          displayName: raw.displayName || raw.username || d.id,
+        })
+      );
+    });
+    // Sort: 1. By Elo descending, 2. Alphabetically by displayName
+    accounts.sort((a, b) => {
+      if (b.elo !== a.elo) return b.elo - a.elo;
+      return (a.displayName || a.username).localeCompare(b.displayName || b.username, 'vi');
+    });
+    return accounts;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.LIST, 'competition_accounts');
+    return [];
+  }
+}
+
+// Real-time subscription to competition accounts in Firestore
+export function subscribeCompetitionAccounts(
+  callback: (accounts: CompetitionAccount[]) => void
+): () => void {
+  return onSnapshot(
+    collection(db, 'competition_accounts'),
+    (snap) => {
+      const accounts: CompetitionAccount[] = [];
+      snap.forEach((d) => {
+        const raw = d.data() as CompetitionAccount;
+        accounts.push(
+          applyInactivityDecay({
+            ...raw,
+            username: raw.username || d.id,
+            displayName: raw.displayName || raw.username || d.id,
+          })
+        );
+      });
+      accounts.sort((a, b) => {
+        if (b.elo !== a.elo) return b.elo - a.elo;
+        return (a.displayName || a.username).localeCompare(b.displayName || b.username, 'vi');
+      });
+      callback(accounts);
+    },
+    (err) => {
+      console.error('Error in subscribeCompetitionAccounts:', err);
+    }
+  );
+}
+
+// Ensure initial preset accounts exist in Firestore if collection is empty
 export async function seedPresetAccountsIfNotExist(): Promise<CompetitionAccount[]> {
+  try {
+    const existingSnap = await getDocs(collection(db, 'competition_accounts'));
+    // If accounts already exist in Firestore, do NOT overwrite or re-seed deleted ones
+    if (!existingSnap.empty) {
+      const accounts: CompetitionAccount[] = [];
+      for (const d of existingSnap.docs) {
+        const raw = d.data() as CompetitionAccount;
+        const adjusted = applyInactivityDecay({
+          ...raw,
+          username: raw.username || d.id,
+          displayName: raw.displayName || raw.username || d.id,
+        });
+        if (adjusted.elo !== raw.elo || adjusted.rankStatus !== raw.rankStatus) {
+          updateDoc(doc(db, 'competition_accounts', d.id), {
+            elo: adjusted.elo,
+            rankStatus: adjusted.rankStatus,
+            updatedAt: Date.now(),
+          }).catch(() => {});
+        }
+        accounts.push(adjusted);
+      }
+      return accounts;
+    }
+  } catch (err) {
+    console.warn('Error checking existing accounts in seed check:', err);
+  }
+
+  // Only seed default accounts if the database collection is completely empty
   const accounts: CompetitionAccount[] = [];
   for (const preset of PRESET_ACCOUNTS) {
     const docRef = doc(db, 'competition_accounts', preset.username);
@@ -194,14 +280,11 @@ export async function seedPresetAccountsIfNotExist(): Promise<CompetitionAccount
         accounts.push(newAcc);
       } else {
         const raw = snap.data() as CompetitionAccount;
-        const adjusted = applyInactivityDecay(raw);
-        if (adjusted.elo !== raw.elo || adjusted.rankStatus !== raw.rankStatus) {
-          await updateDoc(docRef, {
-            elo: adjusted.elo,
-            rankStatus: adjusted.rankStatus,
-            updatedAt: Date.now(),
-          });
-        }
+        const adjusted = applyInactivityDecay({
+          ...raw,
+          username: raw.username || preset.username,
+          displayName: raw.displayName || preset.displayName,
+        });
         accounts.push(adjusted);
       }
     } catch (err) {
@@ -227,15 +310,39 @@ export async function seedPresetAccountsIfNotExist(): Promise<CompetitionAccount
   return accounts;
 }
 
+// Helper to find account docRef by username or doc ID
+async function findCompetitionAccountDocRef(cleanUsername: string) {
+  const directRef = doc(db, 'competition_accounts', cleanUsername);
+  const snap = await getDoc(directRef);
+  if (snap.exists()) {
+    return { docRef: directRef, snap };
+  }
+  // Search by username field
+  const allSnap = await getDocs(collection(db, 'competition_accounts'));
+  for (const d of allSnap.docs) {
+    const data = d.data() as CompetitionAccount;
+    if (
+      d.id.toLowerCase() === cleanUsername ||
+      (data.username && data.username.toLowerCase() === cleanUsername)
+    ) {
+      return { docRef: doc(db, 'competition_accounts', d.id), snap: d };
+    }
+  }
+  return { docRef: directRef, snap: null };
+}
+
 // Get account by username
 export async function getCompetitionAccount(username: string): Promise<CompetitionAccount | null> {
   const clean = username.trim().toLowerCase();
-  const docRef = doc(db, 'competition_accounts', clean);
   try {
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return null;
+    const { snap } = await findCompetitionAccountDocRef(clean);
+    if (!snap || !snap.exists()) return null;
     const raw = snap.data() as CompetitionAccount;
-    return applyInactivityDecay(raw);
+    return applyInactivityDecay({
+      ...raw,
+      username: raw.username || snap.id,
+      displayName: raw.displayName || raw.username || snap.id,
+    });
   } catch (err) {
     handleFirestoreError(err, OperationType.GET, `competition_accounts/${clean}`);
     return null;
@@ -249,10 +356,9 @@ export async function changeCompetitionAccountPassword(
   newPass: string
 ): Promise<{ success: boolean; message: string }> {
   const clean = username.trim().toLowerCase();
-  const docRef = doc(db, 'competition_accounts', clean);
   try {
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) {
+    const { docRef, snap } = await findCompetitionAccountDocRef(clean);
+    if (!snap || !snap.exists()) {
       return { success: false, message: 'Tài khoản không tồn tại!' };
     }
     const data = snap.data() as CompetitionAccount;
@@ -320,14 +426,18 @@ export async function loginCompetitionAccount(
   resetSessionTriggered?: boolean;
 }> {
   const clean = username.trim().toLowerCase();
-  const docRef = doc(db, 'competition_accounts', clean);
   try {
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) {
+    const { docRef, snap } = await findCompetitionAccountDocRef(clean);
+    if (!snap || !snap.exists()) {
       return { success: false, message: `Tài khoản "${clean}" không tồn tại trong danh sách thi đấu!` };
     }
 
-    const acc = snap.data() as CompetitionAccount;
+    const raw = snap.data() as CompetitionAccount;
+    const acc: CompetitionAccount = {
+      ...raw,
+      username: raw.username || snap.id,
+      displayName: raw.displayName || raw.username || snap.id,
+    };
     const now = Date.now();
     const SESSION_TIMEOUT_MS = 60 * 1000; // 60s timeout cho phiên không hoạt động
 

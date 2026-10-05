@@ -11,10 +11,25 @@ import {
   X,
   Flame,
   Award,
+  Trophy,
+  History,
+  ShieldCheck,
+  LogOut,
 } from 'lucide-react';
 import { GameRule, RoomListItem, XiangqiTimeMode } from '../types';
-import { socket } from '../socket';
+import {
+  socket,
+  getSavedCompetitionAccount,
+  saveCompetitionAccount,
+  getClientSessionId,
+  SavedCompetitionAccount,
+} from '../socket';
 import { RuleGuideModal } from './RuleGuideModal';
+import { XiangqiSimulator } from './XiangqiSimulator';
+import { RankedLoginModal } from './RankedLoginModal';
+import { RankedLeaderboardModal } from './RankedLeaderboardModal';
+import { RankedMatchHistoryModal } from './RankedMatchHistoryModal';
+import { getLeaderboardRankMap, PlayerRankStats, logoutCompetitionAccount } from '../firebase';
 
 interface LobbyProps {
   playerName: string;
@@ -24,6 +39,7 @@ interface LobbyProps {
   onCreateRoom: (rule: GameRule, xiangqiTimeMode?: XiangqiTimeMode) => void;
   onJoinRoom: (roomCode: string) => void;
   onAdjustScore?: (delta: number) => void;
+  onUpdateProfile?: (name: string, avatar: string) => void;
 }
 
 export const Lobby: React.FC<LobbyProps> = ({
@@ -34,6 +50,7 @@ export const Lobby: React.FC<LobbyProps> = ({
   onCreateRoom,
   onJoinRoom,
   onAdjustScore,
+  onUpdateProfile,
 }) => {
   const [rooms, setRooms] = useState<RoomListItem[]>([]);
   const [filterRule, setFilterRule] = useState<GameRule | 'ALL'>('ALL');
@@ -42,9 +59,28 @@ export const Lobby: React.FC<LobbyProps> = ({
   const [secretFeedback, setSecretFeedback] = useState<{ text: string; type: 'success' | 'info' } | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedRule, setSelectedRule] = useState<GameRule>('TIEN_LEN_MIEN_NAM');
-  const [selectedTimeMode, setSelectedTimeMode] = useState<XiangqiTimeMode>('STANDARD');
+  const [selectedTimeMode, setSelectedTimeMode] = useState<XiangqiTimeMode>('RANKED');
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Ranked Xiangqi competition account & modal states
+  const [competitionAccount, setCompetitionAccount] = useState<SavedCompetitionAccount | null>(() =>
+    getSavedCompetitionAccount()
+  );
+  const [rankMap, setRankMap] = useState<Map<string, PlayerRankStats>>(new Map());
+  const [isRankedLoginOpen, setIsRankedLoginOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    | { type: 'CREATE'; rule: GameRule; timeMode?: XiangqiTimeMode }
+    | { type: 'JOIN'; roomCode: string }
+    | null
+  >(null);
+
+  useEffect(() => {
+    getLeaderboardRankMap().then(setRankMap);
+  }, []);
 
   const feedbackTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -113,7 +149,71 @@ export const Lobby: React.FC<LobbyProps> = ({
       return;
     }
     setJoinError(null);
+    if (code.startsWith('CT')) {
+      const saved = getSavedCompetitionAccount();
+      if (!saved) {
+        setPendingAction({ type: 'JOIN', roomCode: code });
+        setIsRankedLoginOpen(true);
+        return;
+      }
+    }
     onJoinRoom(code);
+  };
+
+  const handleAttemptJoin = (room: RoomListItem) => {
+    if (room.rule === 'CO_TUONG' && (room.xiangqiTimeMode === 'RANKED' || !room.xiangqiTimeMode)) {
+      const saved = getSavedCompetitionAccount();
+      if (!saved) {
+        setPendingAction({ type: 'JOIN', roomCode: room.code });
+        setIsRankedLoginOpen(true);
+        return;
+      }
+    }
+    onJoinRoom(room.code);
+  };
+
+  const handleAttemptCreate = () => {
+    if (selectedRule === 'CO_TUONG' && (selectedTimeMode === 'RANKED' || !selectedTimeMode)) {
+      const saved = getSavedCompetitionAccount();
+      if (!saved) {
+        setPendingAction({
+          type: 'CREATE',
+          rule: 'CO_TUONG',
+          timeMode: 'RANKED',
+        });
+        setIsRankedLoginOpen(true);
+        return;
+      }
+    }
+    setIsCreateModalOpen(false);
+    onCreateRoom(selectedRule, selectedRule === 'CO_TUONG' ? selectedTimeMode : undefined);
+  };
+
+  const handleRankedLoginSuccess = (account: SavedCompetitionAccount) => {
+    setCompetitionAccount(account);
+    const chosenName = account.displayName || account.username;
+    if (chosenName && onUpdateProfile) {
+      onUpdateProfile(chosenName, playerAvatar);
+    }
+    getLeaderboardRankMap().then(setRankMap);
+    if (pendingAction) {
+      if (pendingAction.type === 'CREATE') {
+        setIsCreateModalOpen(false);
+        onCreateRoom(pendingAction.rule || 'CO_TUONG', pendingAction.timeMode || 'RANKED');
+      } else if (pendingAction.type === 'JOIN' && pendingAction.roomCode) {
+        onJoinRoom(pendingAction.roomCode);
+      }
+      setPendingAction(null);
+    }
+  };
+
+  const handleRankedLogout = async () => {
+    if (competitionAccount) {
+      const sessionId = getClientSessionId();
+      await logoutCompetitionAccount(competitionAccount.username, sessionId).catch(() => {});
+      saveCompetitionAccount(null);
+      setCompetitionAccount(null);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,16 +240,89 @@ export const Lobby: React.FC<LobbyProps> = ({
           </div>
           <div>
             <h1 className="font-black text-base sm:text-lg tracking-tight leading-tight">
-              Sảnh Đánh Bài Realtime
+              Sảnh Đánh Bài & Trò Chơi Trực Tuyến
             </h1>
             <p className="text-[11px] text-emerald-300/80 font-medium">
-              Tiến Lên &bull; Sâm Lốc &bull; Cờ Tướng &bull; Cờ Caro &bull; Bắn Tàu &bull; Cờ Cá Ngựa
+              Cờ Tướng Xếp Hạng &bull; Tiến Lên &bull; Sâm Lốc &bull; Cờ Vua &bull; Cờ Caro &bull; Bắn Tàu &bull; Cá Ngựa
             </p>
           </div>
         </div>
 
         {/* User profile capsule & rule button */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+          {/* Nút Tài khoản Cờ Xếp Hạng & Bảng Xếp Hạng */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setIsRankedLoginOpen(true)}
+              id="btn-open-ranked-account"
+              className={`p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition touch-manipulation cursor-pointer shadow-sm border ${
+                competitionAccount
+                  ? 'bg-gradient-to-r from-red-950/70 to-amber-950/70 border-amber-500/60 text-amber-300 hover:text-white hover:border-amber-400'
+                  : 'bg-slate-900 hover:bg-slate-800 border-amber-500/40 text-amber-300 hover:text-white'
+              }`}
+              title={
+                competitionAccount
+                  ? 'Xem hồ sơ & thông tin tài khoản thi đấu (bấm để xem stats/đổi mật khẩu/đăng xuất)'
+                  : 'Đăng nhập tài khoản thi đấu cờ tướng xếp hạng'
+              }
+            >
+              <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">
+                {competitionAccount
+                  ? (() => {
+                      const stats = rankMap.get(competitionAccount.username.toLowerCase());
+                      const rankText = stats?.rank ? ` • Hạng ${stats.rank}/${stats.total}` : '';
+                      return `${competitionAccount.displayName} (${competitionAccount.elo} Elo${rankText})`;
+                    })()
+                  : 'Cờ Xếp Hạng'}
+              </span>
+            </button>
+
+            {/* Nút Đăng Xuất nhanh khi đã đăng nhập */}
+            {competitionAccount && (
+              <button
+                type="button"
+                onClick={handleRankedLogout}
+                id="btn-quick-logout-ranked"
+                className="p-2 sm:px-2.5 sm:py-1.5 bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/80 rounded-xl text-xs font-bold text-rose-300 hover:text-white flex items-center gap-1 transition touch-manipulation cursor-pointer shadow-sm"
+                title="Đăng xuất tài khoản cờ xếp hạng"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden md:inline">Đăng xuất</span>
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => setIsLeaderboardOpen(true)}
+            id="btn-open-leaderboard"
+            className="p-2 sm:px-2.5 sm:py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-amber-400 hover:text-white flex items-center gap-1.5 transition touch-manipulation cursor-pointer"
+            title="Bảng xếp hạng Elo Cờ Tướng"
+          >
+            <Award className="w-4 h-4" />
+            <span className="hidden md:inline">BXH</span>
+          </button>
+
+          <button
+            onClick={() => setIsHistoryOpen(true)}
+            id="btn-open-history"
+            className="p-2 sm:px-2.5 sm:py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-emerald-400 hover:text-white flex items-center gap-1.5 transition touch-manipulation cursor-pointer"
+            title="Lịch sử các ván đấu cờ xếp hạng"
+          >
+            <History className="w-4 h-4" />
+            <span className="hidden md:inline">Lịch Sử</span>
+          </button>
+
+          <button
+            onClick={() => setIsSimulatorOpen(true)}
+            id="btn-open-simulator-lobby"
+            className="p-2 sm:px-3 sm:py-1.5 bg-gradient-to-r from-amber-600/30 to-amber-500/20 hover:from-amber-600/40 hover:to-amber-500/30 border border-amber-500/50 rounded-xl text-xs font-bold text-amber-300 hover:text-white flex items-center gap-1.5 transition touch-manipulation cursor-pointer shadow-sm"
+            title="Cờ Thế & Simulator (Tự xếp cờ & giải)"
+          >
+            <span className="text-sm">🧩</span>
+            <span className="hidden sm:inline">Cờ Thế</span>
+          </button>
+
           <button
             onClick={() => setIsRuleModalOpen(true)}
             id="btn-rules-lobby"
@@ -157,7 +330,7 @@ export const Lobby: React.FC<LobbyProps> = ({
             title="Luật & Mức Phạt"
           >
             <BookOpen className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Luật & Mức Phạt</span>
+            <span className="hidden sm:inline">Luật</span>
           </button>
 
           <div
@@ -310,9 +483,18 @@ export const Lobby: React.FC<LobbyProps> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setFilterRule('CO_VUA')}
+                  className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
+                    filterRule === 'CO_VUA' ? 'bg-purple-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Cờ Vua
+                </button>
+                <button
+                  type="button"
                   onClick={() => setFilterRule('CARO')}
                   className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
-                    filterRule === 'CARO' ? 'bg-cyan-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                    filterRule === 'CARO' ? 'bg-sky-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   Cờ Caro
@@ -321,7 +503,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                   type="button"
                   onClick={() => setFilterRule('BAN_TAU')}
                   className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
-                    filterRule === 'BAN_TAU' ? 'bg-blue-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                    filterRule === 'BAN_TAU' ? 'bg-cyan-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
                   Bắn Tàu
@@ -330,20 +512,10 @@ export const Lobby: React.FC<LobbyProps> = ({
                   type="button"
                   onClick={() => setFilterRule('CO_CA_NGUA')}
                   className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
-                    filterRule === 'CO_CA_NGUA' ? 'bg-purple-700 text-white shadow' : 'text-slate-400 hover:text-white'
+                    filterRule === 'CO_CA_NGUA' ? 'bg-orange-600 text-white shadow' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  Cờ Cá Ngựa
-                </button>
-                <button
-                  type="button"
-                  id="btn-filter-co-vua"
-                  onClick={() => setFilterRule('CO_VUA')}
-                  className={`px-3 py-1.5 min-h-[36px] whitespace-nowrap rounded-lg font-bold transition cursor-pointer touch-manipulation ${
-                    filterRule === 'CO_VUA' ? 'bg-amber-700 text-white shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  ♟️ Cờ Vua
+                  Cá Ngựa
                 </button>
               </div>
 
@@ -380,14 +552,42 @@ export const Lobby: React.FC<LobbyProps> = ({
               {filteredRooms.map((room) => {
                 const isFull = room.playerCount >= room.maxPlayers;
                 const isPlaying = room.status === 'PLAYING';
-                const isCoTuong = room.rule === 'CO_TUONG';
-                const isCaro = room.rule === 'CARO';
-                const isBanTau = room.rule === 'BAN_TAU';
-                const isCoCaNgua = room.rule === 'CO_CA_NGUA';
-                const isCoVua = room.rule === 'CO_VUA';
-                const isBoardGame = isCoTuong || isCaro || isBanTau || isCoCaNgua || isCoVua;
-                // For board games, spectators can join even if match is in progress as long as room is not full (max 6 for chess, 8 for others)
+                const isBoardGame =
+                  room.rule === 'CO_TUONG' ||
+                  room.rule === 'CO_VUA' ||
+                  room.rule === 'CARO' ||
+                  room.rule === 'BAN_TAU';
+                // Spectators can join board games even if match is in progress as long as room is not full
                 const canJoin = !isFull && (!isPlaying || isBoardGame);
+
+                const getBadge = () => {
+                  switch (room.rule) {
+                    case 'TIEN_LEN_MIEN_NAM':
+                      return { text: '♠ Tiến Lên MN', cls: 'bg-emerald-950 text-emerald-300 border-emerald-800' };
+                    case 'SAM_LOC':
+                      return { text: '🔥 Sâm Lốc', cls: 'bg-amber-950 text-amber-300 border-amber-800' };
+                    case 'CO_TUONG':
+                      return {
+                        text:
+                          room.xiangqiTimeMode === 'RANKED' || !room.xiangqiTimeMode
+                            ? '🏆 Cờ Tướng Xếp Hạng'
+                            : '📜 Cờ Tướng (Tiêu chuẩn)',
+                        cls: 'bg-red-950 text-red-300 border-red-800',
+                      };
+                    case 'CO_VUA':
+                      return { text: '♟️ Cờ Vua', cls: 'bg-purple-950 text-purple-300 border-purple-800' };
+                    case 'CARO':
+                      return { text: '⭕ Cờ Caro', cls: 'bg-sky-950 text-sky-300 border-sky-800' };
+                    case 'BAN_TAU':
+                      return { text: '🚢 Bắn Tàu', cls: 'bg-cyan-950 text-cyan-300 border-cyan-800' };
+                    case 'CO_CA_NGUA':
+                      return { text: '🎲 Cờ Cá Ngựa', cls: 'bg-orange-950 text-orange-300 border-orange-800' };
+                    default:
+                      return { text: room.rule, cls: 'bg-slate-900 text-slate-300 border-slate-700' };
+                  }
+                };
+
+                const badge = getBadge();
 
                 return (
                   <div
@@ -400,37 +600,9 @@ export const Lobby: React.FC<LobbyProps> = ({
                           {room.code}
                         </span>
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            room.rule === 'TIEN_LEN_MIEN_NAM'
-                              ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                              : room.rule === 'SAM_LOC'
-                              ? 'bg-amber-950 text-amber-300 border-amber-800'
-                              : room.rule === 'CO_TUONG'
-                              ? 'bg-red-950 text-red-300 border-red-800'
-                              : room.rule === 'CARO'
-                              ? 'bg-cyan-950 text-cyan-300 border-cyan-800'
-                              : room.rule === 'BAN_TAU'
-                              ? 'bg-blue-950 text-blue-300 border-blue-800'
-                              : room.rule === 'CO_VUA'
-                              ? 'bg-amber-950 text-amber-300 border-amber-800'
-                              : 'bg-purple-950 text-purple-300 border-purple-800'
-                          }`}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badge.cls}`}
                         >
-                          {room.rule === 'TIEN_LEN_MIEN_NAM'
-                            ? '♠ Tiến Lên'
-                            : room.rule === 'SAM_LOC'
-                            ? '🔥 Sâm Lốc'
-                            : room.rule === 'CARO'
-                            ? '⚡ Cờ Caro (5p)'
-                            : room.rule === 'BAN_TAU'
-                            ? '🚢 Bắn Tàu'
-                            : room.rule === 'CO_CA_NGUA'
-                            ? '🎲 Cờ Cá Ngựa'
-                            : room.rule === 'CO_VUA'
-                            ? '♟️ Cờ Vua'
-                            : room.xiangqiTimeMode === 'STANDARD'
-                            ? '🏆 Cờ Tướng (Tiêu chuẩn)'
-                            : '⚡ Cờ Tướng (Chớp 5p)'}
+                          {badge.text}
                         </span>
                       </div>
 
@@ -463,7 +635,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                         type="button"
                         id={`btn-join-${room.code}`}
                         disabled={!canJoin}
-                        onClick={() => onJoinRoom(room.code)}
+                        onClick={() => handleAttemptJoin(room)}
                         className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold transition touch-manipulation ${
                           canJoin
                             ? isPlaying && isBoardGame
@@ -492,7 +664,7 @@ export const Lobby: React.FC<LobbyProps> = ({
       {/* CREATE ROOM MODAL */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-slate-900 border border-emerald-500/40 w-full max-w-lg rounded-2xl p-6 shadow-2xl relative">
+          <div className="bg-slate-900 border border-emerald-500/40 w-full max-w-2xl rounded-2xl p-5 sm:p-6 shadow-2xl relative">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <PlusCircle className="w-5 h-5 text-emerald-400" />
@@ -511,133 +683,123 @@ export const Lobby: React.FC<LobbyProps> = ({
                 <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
                   Chọn Thể Loại Chơi
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-[48vh] overflow-y-auto pr-1">
+                  {/* TIẾN LÊN MIỀN NAM */}
                   <button
                     type="button"
                     onClick={() => setSelectedRule('TIEN_LEN_MIEN_NAM')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                       selectedRule === 'TIEN_LEN_MIEN_NAM'
                         ? 'bg-emerald-950/60 border-emerald-500 ring-2 ring-emerald-500/30 text-white'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-2xl mb-2 block">♠</span>
-                    <span className="font-black text-sm block text-white">Tiến Lên MN</span>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      13 lá, so chất Cơ &gt; Rô &gt; Tép &gt; Bích, chặt heo.
+                    <span className="text-2xl mb-1.5 block">♠</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Tiến Lên MN</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      13 lá, chặt heo, tứ quý, tới trắng.
                     </span>
                   </button>
 
+                  {/* SÂM LỐC */}
                   <button
                     type="button"
                     onClick={() => setSelectedRule('SAM_LOC')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                       selectedRule === 'SAM_LOC'
                         ? 'bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/30 text-white'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-2xl mb-2 block">🔥</span>
-                    <span className="font-black text-sm block text-white">Sâm Lốc</span>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      10 lá, không so chất, có Báo Sâm, phạt thối 2.
+                    <span className="text-2xl mb-1.5 block">🔥</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Sâm Lốc</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      10 lá, không so chất, có Báo Sâm.
                     </span>
                   </button>
 
+                  {/* CỜ TƯỚNG */}
                   <button
                     type="button"
                     onClick={() => setSelectedRule('CO_TUONG')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
                       selectedRule === 'CO_TUONG'
                         ? 'bg-red-950/60 border-red-500 ring-2 ring-red-500/30 text-white'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-2xl mb-2 block">🏆</span>
-                    <span className="font-black text-sm block text-white">Cờ Tướng</span>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      Tiêu chuẩn (60p + 30s) hoặc Cờ chớp (5p + 3s).
+                    <span className="text-2xl mb-1.5 block">🏆</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Tướng Xếp Hạng</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      Đấu xếp hạng tính Elo hoặc Tiêu chuẩn.
                     </span>
                   </button>
 
+                  {/* CỜ VUA */}
                   <button
                     type="button"
-                    onClick={() => setSelectedRule('CARO')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
-                      selectedRule === 'CARO'
-                        ? 'bg-cyan-950/60 border-cyan-500 ring-2 ring-cyan-500/30 text-white'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className="text-2xl mb-2 block">❌⭕</span>
-                    <span className="font-black text-sm block text-white">Cờ Caro</span>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      Ăn 5 chặn 2 đầu vẫn THẮNG. Thời gian 5 phút/bên.
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRule('BAN_TAU')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
-                      selectedRule === 'BAN_TAU'
-                        ? 'bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30 text-white'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className="text-2xl mb-2 block">🚢</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-sm block text-white">Bắn Tàu</span>
-                      <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-bold">
-                        HOT
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      Hải chiến 10x10, dàn 5 chiến hạm tiêu diệt đối phương (2 Thuyền trưởng + 6 Khán giả).
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    id="btn-select-rule-co-ca-ngua"
-                    onClick={() => setSelectedRule('CO_CA_NGUA')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
-                      selectedRule === 'CO_CA_NGUA'
+                    onClick={() => setSelectedRule('CO_VUA')}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'CO_VUA'
                         ? 'bg-purple-950/60 border-purple-500 ring-2 ring-purple-500/30 text-white'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-2xl mb-2 block">🎲</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-sm block text-white">Cờ Cá Ngựa</span>
-                      <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-bold">
-                        MỚI NHẤT
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      Đua ngựa 2 - 4 người (Đỏ, Xanh, Vàng, Lục) + 4 khách. Gieo 1 hoặc 6 xuất chuồng, đá ngựa, về đích!
+                    <span className="text-2xl mb-1.5 block">♟️</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Vua</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      FIDE 15p + 10s, có AI phân tích.
                     </span>
                   </button>
 
+                  {/* CỜ CARO */}
                   <button
                     type="button"
-                    id="btn-select-rule-co-vua"
-                    onClick={() => setSelectedRule('CO_VUA')}
-                    className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
-                      selectedRule === 'CO_VUA'
-                        ? 'bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/30 text-white'
+                    onClick={() => setSelectedRule('CARO')}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'CARO'
+                        ? 'bg-sky-950/60 border-sky-500 ring-2 ring-sky-500/30 text-white'
                         : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                     }`}
                   >
-                    <span className="text-2xl mb-2 block">♟️</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-sm block text-white">Cờ Vua (Chess)</span>
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-bold">
-                        15+10S
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-400 mt-1 block leading-tight">
-                      Cờ vua Rapid 15 phút (+10s mỗi nước đi), có chế độ khán giả theo dõi và bình luận.
+                    <span className="text-2xl mb-1.5 block">⭕</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Caro</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      Gomoku 15x15, chặn 2 đầu, 5 nước.
+                    </span>
+                  </button>
+
+                  {/* BẮN TÀU */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRule('BAN_TAU')}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'BAN_TAU'
+                        ? 'bg-cyan-950/60 border-cyan-500 ring-2 ring-cyan-500/30 text-white'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1.5 block">🚢</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Bắn Tàu Chiến</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      Battleship 10x10, bố trí hạm đội.
+                    </span>
+                  </button>
+
+                  {/* CỜ CÁ NGỰA */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRule('CO_CA_NGUA')}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                      selectedRule === 'CO_CA_NGUA'
+                        ? 'bg-orange-950/60 border-orange-500 ring-2 ring-orange-500/30 text-white'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-2xl mb-1.5 block">🎲</span>
+                    <span className="font-black text-xs sm:text-sm block text-white">Cờ Cá Ngựa</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block leading-tight">
+                      Ludo 2-4 người, xí ngầu 3D, đá ngựa.
                     </span>
                   </button>
                 </div>
@@ -651,50 +813,82 @@ export const Lobby: React.FC<LobbyProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <button
                       type="button"
-                      id="btn-select-standard-time"
-                      onClick={() => setSelectedTimeMode('STANDARD')}
+                      id="btn-select-ranked-time"
+                      onClick={() => setSelectedTimeMode('RANKED')}
                       className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-start gap-3 ${
-                        selectedTimeMode === 'STANDARD'
-                          ? 'bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/30 text-white'
+                        selectedTimeMode === 'RANKED'
+                          ? 'bg-amber-950/70 border-amber-500 ring-2 ring-amber-500/30 text-white'
                           : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                       }`}
                     >
-                      <Award className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                      <Trophy className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                       <div>
                         <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <span>Cờ Tiêu Chuẩn Quốc Tế</span>
-                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded">WXF</span>
+                          <span>Cờ Tướng Xếp Hạng</span>
+                          <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1 rounded font-mono font-bold">
+                            RANKED
+                          </span>
                         </div>
-                        <div className="text-[11px] text-slate-300 mt-0.5">
-                          60 phút + 30s tích lũy/nước
+                        <div className="text-[11px] text-slate-300 mt-0.5 leading-tight">
+                          30 phút tổng &bull; 2 phút/nước &bull; Tính Elo
                         </div>
                       </div>
                     </button>
 
                     <button
                       type="button"
-                      id="btn-select-blitz-time"
-                      onClick={() => setSelectedTimeMode('BLITZ_5M')}
+                      id="btn-select-standard-time"
+                      onClick={() => setSelectedTimeMode('STANDARD')}
                       className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-start gap-3 ${
-                        selectedTimeMode === 'BLITZ_5M'
+                        selectedTimeMode === 'STANDARD'
                           ? 'bg-red-950/60 border-red-500 ring-2 ring-red-500/30 text-white'
                           : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
                       }`}
                     >
-                      <Flame className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                      <Award className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                       <div>
-                        <div className="text-xs font-bold text-white">Cờ Chớp 5 Phút</div>
-                        <div className="text-[11px] text-slate-300 mt-0.5">
-                          5 phút + 3s tích lũy/nước
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>Cờ Tiêu Chuẩn Quốc Tế</span>
+                          <span className="text-[9px] bg-red-500/20 text-red-300 px-1 rounded font-mono font-bold">
+                            WXF
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-300 mt-0.5 leading-tight">
+                          60 phút + 30s tích lũy/nước
                         </div>
                       </div>
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreateModalOpen(false);
+                      setIsSimulatorOpen(true);
+                    }}
+                    className="mt-3 w-full p-2.5 rounded-xl border border-amber-500/40 bg-amber-950/40 hover:bg-amber-900/50 text-amber-300 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer"
+                  >
+                    <span>🧩 Hoặc mở Chế Độ Cờ Thế (Simulator) - Tự xếp cờ & giải</span>
+                  </button>
                 </div>
               )}
 
               <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-xs text-slate-400">
-                &bull; Phòng tối đa <strong>{selectedRule === 'CO_VUA' ? '6 người (2 kỳ thủ + 4 khán giả)' : selectedRule === 'CO_CA_NGUA' ? '8 người (4 kỳ thủ đua ngựa + 4 khán giả)' : selectedRule === 'CO_TUONG' || selectedRule === 'CARO' || selectedRule === 'BAN_TAU' ? '8 người (2 người thi đấu + 6 khán giả)' : '4 người chơi'}</strong>.
+                &bull; Thể loại: <strong className="text-white">
+                  {selectedRule === 'TIEN_LEN_MIEN_NAM'
+                    ? 'Tiến Lên Miền Nam (Tối đa 4 người)'
+                    : selectedRule === 'SAM_LOC'
+                    ? 'Sâm Lốc (Tối đa 4 người)'
+                    : selectedRule === 'CO_TUONG'
+                    ? 'Cờ Tướng (2 kỳ thủ + slot theo dõi)'
+                    : selectedRule === 'CO_VUA'
+                    ? 'Cờ Vua (2 kỳ thủ + slot theo dõi)'
+                    : selectedRule === 'CARO'
+                    ? 'Cờ Caro (2 kỳ thủ + slot theo dõi)'
+                    : selectedRule === 'BAN_TAU'
+                    ? 'Bắn Tàu Chiến (2 chỉ huy + slot theo dõi)'
+                    : 'Cờ Cá Ngựa (2-4 người chơi)'}
+                </strong>.
                 <br />
                 &bull; Bạn sẽ tự động trở thành <strong>Chủ phòng (Host)</strong> và có quyền bắt đầu ván đấu.
               </div>
@@ -702,10 +896,7 @@ export const Lobby: React.FC<LobbyProps> = ({
               <button
                 type="button"
                 id="btn-confirm-create-room"
-                onClick={() => {
-                  setIsCreateModalOpen(false);
-                  onCreateRoom(selectedRule, selectedRule === 'CO_TUONG' ? selectedTimeMode : undefined);
-                }}
+                onClick={handleAttemptCreate}
                 className="w-full min-h-[46px] py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm rounded-xl shadow-lg transition cursor-pointer touch-manipulation"
               >
                 Khởi Tạo &amp; Vào Phòng Ngay
@@ -720,6 +911,53 @@ export const Lobby: React.FC<LobbyProps> = ({
         isOpen={isRuleModalOpen}
         onClose={() => setIsRuleModalOpen(false)}
         defaultRule={filterRule === 'SAM_LOC' ? 'SAM_LOC' : 'TIEN_LEN_MIEN_NAM'}
+      />
+
+      {/* Xiangqi Simulator Modal */}
+      <XiangqiSimulator
+        isOpen={isSimulatorOpen}
+        onClose={() => setIsSimulatorOpen(false)}
+      />
+
+      {/* Ranked Xiangqi Login Modal */}
+      <RankedLoginModal
+        isOpen={isRankedLoginOpen}
+        onClose={() => {
+          setIsRankedLoginOpen(false);
+          setPendingAction(null);
+        }}
+        onLoginSuccess={handleRankedLoginSuccess}
+        onLogoutSuccess={() => {
+          setCompetitionAccount(null);
+        }}
+        onOpenLeaderboard={() => {
+          setIsRankedLoginOpen(false);
+          setIsLeaderboardOpen(true);
+        }}
+        onOpenHistory={() => {
+          setIsRankedLoginOpen(false);
+          setIsHistoryOpen(true);
+        }}
+      />
+
+      {/* Ranked Leaderboard Modal */}
+      <RankedLeaderboardModal
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+        onOpenHistory={() => {
+          setIsLeaderboardOpen(false);
+          setIsHistoryOpen(true);
+        }}
+      />
+
+      {/* Ranked Match History Modal */}
+      <RankedMatchHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onOpenLeaderboard={() => {
+          setIsHistoryOpen(false);
+          setIsLeaderboardOpen(true);
+        }}
       />
     </div>
   );

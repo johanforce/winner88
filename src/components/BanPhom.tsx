@@ -18,6 +18,7 @@ import {
 import {
   RoomPublicState,
   Card,
+  Suit,
   PlayerPublicInfo,
   ChatMessage,
   PhomMeld,
@@ -448,7 +449,7 @@ export const BanPhom: React.FC<BanPhomProps> = ({
                       {interceptWindow.discardedByPlayerName} vừa đánh lá{' '}
                       <strong className="text-amber-300 font-bold">
                         {getRankLabel(interceptWindow.card.rank)}
-                        {SUIT_SYMBOLS[interceptWindow.card.suit]}
+                        {SUIT_SYMBOLS[interceptWindow.card.suit as Suit]}
                       </strong>
                     </div>
                   </div>

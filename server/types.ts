@@ -249,6 +249,7 @@ export interface XiangqiState {
   blackUsername?: string;
   redElo?: number;
   blackElo?: number;
+  rankedMatchRecorded?: boolean;
 }
 
 export interface Card {
