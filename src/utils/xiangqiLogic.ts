@@ -336,14 +336,14 @@ export function hasAnyLegalMoves(color: XiangqiSide, pieces: XiangqiPiece[]): bo
 }
 
 // Translate piece type to Vietnamese name and Chinese character
-export function getPieceNameVN(type: XiangqiPieceType, color: XiangqiSide): string {
+export function getPieceNameVN(type: XiangqiPieceType, _color?: XiangqiSide): string {
   switch (type) {
     case 'GENERAL':
-      return color === 'RED' ? 'Tướng' : 'Tướng';
+      return 'Tướng';
     case 'ADVISOR':
-      return color === 'RED' ? 'Sĩ' : 'Sĩ';
+      return 'Sĩ';
     case 'ELEPHANT':
-      return color === 'RED' ? 'Tượng' : 'Tượng';
+      return 'Tượng';
     case 'HORSE':
       return 'Mã';
     case 'CHARIOT':
@@ -351,7 +351,7 @@ export function getPieceNameVN(type: XiangqiPieceType, color: XiangqiSide): stri
     case 'CANNON':
       return 'Pháo';
     case 'SOLDIER':
-      return color === 'RED' ? 'Binh' : 'Tốt';
+      return 'Tốt';
   }
 }
 
@@ -374,60 +374,371 @@ export function getPieceCharacter(type: XiangqiPieceType, color: XiangqiSide): s
   }
 }
 
-// Generate friendly Vietnamese notation for a move
+// Tính số lộ (1..9 từ phải sang trái theo góc nhìn của mỗi bên)
+export function getPieceFileNumber(x: number, color: XiangqiSide): number {
+  return color === 'RED' ? 9 - x : x + 1;
+}
+
+// Generate standard Vietnamese Xiangqi notation (Kỳ phổ Cờ Tướng chuẩn)
 export function generateMoveNotation(
   piece: XiangqiPiece,
   to: { x: number; y: number },
-  capturedPiece?: XiangqiPiece
+  capturedPiece?: XiangqiPiece,
+  allPieces?: XiangqiPiece[]
 ): string {
   const name = getPieceNameVN(piece.type, piece.color);
-  const fromCoord = `${piece.x + 1}`;
-  const toCoord = `${to.x + 1}`;
-  
-  let action = '';
-  if (piece.y === to.y) {
-    action = `bình ${toCoord}`;
-  } else if (piece.color === 'RED') {
-    action = to.y < piece.y ? `tiến ${Math.abs(piece.y - to.y)}` : `thoái ${Math.abs(piece.y - to.y)}`;
-  } else {
-    action = to.y > piece.y ? `tiến ${Math.abs(piece.y - to.y)}` : `thoái ${Math.abs(piece.y - to.y)}`;
+  const fromCol = getPieceFileNumber(piece.x, piece.color);
+  const toCol = getPieceFileNumber(to.x, piece.color);
+
+  // Kiểm tra nếu có >= 2 quân cùng loại, cùng màu nằm trên cùng 1 cột dọc (lộ)
+  let prefixPos = '';
+  if (allPieces) {
+    const sameFilePieces = allPieces.filter(
+      (p) => p.color === piece.color && p.type === piece.type && p.x === piece.x
+    );
+    if (sameFilePieces.length >= 2) {
+      const sorted = [...sameFilePieces].sort((a, b) =>
+        piece.color === 'RED' ? a.y - b.y : b.y - a.y
+      );
+      const idx = sorted.findIndex((p) => p.id === piece.id || (p.x === piece.x && p.y === piece.y));
+      if (idx === 0) {
+        prefixPos = ' trước';
+      } else if (idx === sorted.length - 1) {
+        prefixPos = ' sau';
+      } else {
+        prefixPos = ' giữa';
+      }
+    }
   }
 
-  let text = `${name} ${fromCoord} ${action}`;
+  const isDiagonalPiece =
+    piece.type === 'HORSE' || piece.type === 'ELEPHANT' || piece.type === 'ADVISOR';
+  const dy = Math.abs(piece.y - to.y);
+
+  let action = '';
+  if (piece.y === to.y) {
+    action = `bình ${toCol}`;
+  } else {
+    const isForward = piece.color === 'RED' ? to.y < piece.y : to.y > piece.y;
+    const dirWord = isForward ? 'tiến' : 'thoái';
+    // Quân đi chéo (Mã, Tượng, Sĩ): ghi lộ đích; Quân đi thẳng (Tướng, Xe, Pháo, Tốt): ghi số bước dọc
+    const targetVal = isDiagonalPiece ? toCol : dy;
+    action = `${dirWord} ${targetVal}`;
+  }
+
+  let text = `${name}${prefixPos} ${fromCol} ${action}`;
   if (capturedPiece) {
     text += ` (ăn ${getPieceNameVN(capturedPiece.type, capturedPiece.color)})`;
   }
   return text;
 }
 
-export function formatMoveHistoryToKyPho(moves: XiangqiMove[]): string {
-  if (!moves || moves.length === 0) return 'Chưa có nước đi nào.';
-  const lines: string[] = [];
-  for (let i = 0; i < moves.length; i += 2) {
-    const round = Math.floor(i / 2) + 1;
-    const redMove = moves[i]?.notation || '...';
-    const blackMove = moves[i + 1]?.notation || '';
-    lines.push(`${round}. ${redMove.padEnd(24, ' ')}${blackMove}`);
-  }
-  return lines.join('\n');
+// Tạo mã hash duy nhất cho thế cờ hiện tại
+export function getBoardPositionKey(pieces: XiangqiPiece[], turnSide: XiangqiSide): string {
+  const piecesKey = pieces
+    .map((p) => `${p.color[0]}${p.type.slice(0, 2)}${p.x}${p.y}`)
+    .sort()
+    .join('');
+  return `${piecesKey}_${turnSide}`;
 }
 
-export function reconstructBoardFromMoves(moves: XiangqiMove[], untilIndex: number): XiangqiPiece[] {
-  let board = createInitialXiangqiPieces();
-  const limit = Math.min(moves.length, untilIndex + 1);
-  for (let i = 0; i < limit; i++) {
-    const move = moves[i];
-    if (!move) continue;
-    // Remove captured piece at destination
-    board = board.filter((p) => !(p.x === move.to.x && p.y === move.to.y));
-    // Move piece
-    board = board.map((p) => {
-      if (p.x === move.from.x && p.y === move.from.y) {
-        return { ...p, x: move.to.x, y: move.to.y };
-      }
-      return p;
-    });
+/**
+ * Kiểm tra luật: 2 bên đi lại nước đi quá 3 lần liên tục là hòa
+ * (Lặp lại thế cờ quá 3 lần liên tục hoặc lặp lại chu kỳ nước đi qua lại quá 3 lần liên tục)
+ */
+export function checkRepetitiveMovesDraw(
+  moves: XiangqiMove[],
+  positionHistory: string[]
+): { isDraw: boolean; reason?: string } {
+  // 1. Kiểm tra thế cờ lặp lại quá 3 lần (xuất hiện lần thứ 4 trở lên)
+  if (positionHistory.length > 0) {
+    const latestPos = positionHistory[positionHistory.length - 1];
+    let occurrences = 0;
+    for (const pos of positionHistory) {
+      if (pos === latestPos) occurrences++;
+    }
+    if (occurrences >= 4) {
+      return {
+        isDraw: true,
+        reason: 'Thế cờ đã lặp lại quá 3 lần liên tục (Hòa theo luật lặp thế cờ).',
+      };
+    }
   }
-  return board;
+
+  // 2. Kiểm tra chuỗi nước đi lặp lại tuần hoàn qua lại giữa 2 bên (chu kỳ K = 2, 4, 6 nước)
+  // Quá 3 lần liên tục = 4 chu kỳ lặp lại liên tiếp
+  const candidatePeriods = [2, 4, 6];
+  for (const K of candidatePeriods) {
+    if (moves.length >= 4 * K) {
+      let isRepeating = true;
+      for (let i = 0; i < 3 * K; i++) {
+        const curMove = moves[moves.length - 1 - i];
+        const prevCycleMove = moves[moves.length - 1 - i - K];
+        if (
+          curMove.from.x !== prevCycleMove.from.x ||
+          curMove.from.y !== prevCycleMove.from.y ||
+          curMove.to.x !== prevCycleMove.to.x ||
+          curMove.to.y !== prevCycleMove.to.y ||
+          curMove.piece.type !== prevCycleMove.piece.type ||
+          curMove.piece.color !== prevCycleMove.piece.color
+        ) {
+          isRepeating = false;
+          break;
+        }
+      }
+      if (isRepeating) {
+        return {
+          isDraw: true,
+          reason: 'Hai bên đi lại nước đi lặp lại quá 3 lần liên tục.',
+        };
+      }
+    }
+  }
+
+  return { isDraw: false };
 }
+
+/**
+ * Tái hiện trạng thái bàn cờ tại một bước bất kỳ trong lịch sử nước đi
+ * stepCount = 0: Bàn cờ ban đầu (trước nước đi đầu tiên)
+ * stepCount = k (1..moveHistory.length): Bàn cờ sau khi đi nước thứ k (moveHistory[k - 1])
+ */
+export function reconstructBoardAtStep(
+  moveHistory: XiangqiMove[],
+  stepCount: number,
+  initialPieces?: XiangqiPiece[]
+): {
+  pieces: XiangqiPiece[];
+  turnSide: XiangqiSide;
+  lastMove: XiangqiMove | null;
+  isCheck: boolean;
+} {
+  let currentPieces: XiangqiPiece[] = initialPieces
+    ? initialPieces.map((p) => ({ ...p }))
+    : createInitialXiangqiPieces();
+  let turnSide: XiangqiSide = 'RED';
+  const clampedStep = Math.max(0, Math.min(moveHistory.length, stepCount));
+
+  for (let i = 0; i < clampedStep; i++) {
+    const mv = moveHistory[i];
+    currentPieces = currentPieces
+      .filter((p) => !(p.x === mv.to.x && p.y === mv.to.y))
+      .map((p) => {
+        if (p.x === mv.from.x && p.y === mv.from.y) {
+          return { ...p, x: mv.to.x, y: mv.to.y };
+        }
+        return p;
+      });
+    turnSide = mv.piece.color === 'RED' ? 'BLACK' : 'RED';
+  }
+
+  const lastMove = clampedStep > 0 ? moveHistory[clampedStep - 1] : null;
+  const isCheck = isSideInCheck(turnSide, currentPieces);
+
+  return {
+    pieces: currentPieces,
+    turnSide,
+    lastMove,
+    isCheck,
+  };
+}
+
+/**
+ * Tái hiện mảng quân cờ sau nước đi tại chỉ số moveIndex (0..moveHistory.length - 1).
+ * Nếu moveIndex < 0, trả về bàn cờ xuất phát 32 quân.
+ */
+export function reconstructBoardFromMoves(
+  moveHistory: XiangqiMove[],
+  moveIndex: number,
+  initialPieces?: XiangqiPiece[]
+): XiangqiPiece[] {
+  return reconstructBoardAtStep(moveHistory, moveIndex + 1, initialPieces).pieces;
+}
+
+/**
+ * Xuất danh sách nước đi thành chuỗi Kỳ Phổ chuẩn để sao chép & dán vào Simulator
+ */
+export function formatMoveHistoryToKyPho(moveHistory: XiangqiMove[]): string {
+  if (!moveHistory || moveHistory.length === 0) return '';
+  return moveHistory
+    .map((m, idx) => {
+      const sideLabel = m.piece.color === 'RED' ? 'Đỏ' : 'Đen';
+      const checkSuffix = m.isCheck ? ' [Chiếu]' : '';
+      return `${idx + 1}. ${sideLabel}: ${m.notation}${checkSuffix}`;
+    })
+    .join('\n');
+}
+
+function normalizeKyPhoMoveText(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '') // bỏ "(ăn ...)"
+    .replace(/\[[^\]]*\]/g, '') // bỏ "[Chiếu]"
+    .replace(/⚡\s*chiếu/g, '')
+    .replace(/chiếu\s*tướng/g, '')
+    .replace(/chiếu/g, '')
+    .replace(/ăn\s+(tướng|sĩ|sỹ|tượng|tịnh|mã|xe|pháo|tốt|binh)/g, '')
+    .replace(/binh/g, 'tốt')
+    .replace(/soái|suất/g, 'tướng')
+    .replace(/tịnh/g, 'tượng')
+    .replace(/sỹ/g, 'sĩ')
+    .replace(/tấn/g, 'tiến')
+    .replace(/thối|lùi/g, 'thoái')
+    .replace(/sang/g, 'bình')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Phân tích văn bản Kỳ Phổ được dán vào Simulator và tái hiện toàn bộ danh sách XiangqiMove + lịch sử bàn cờ
+ */
+export function parseKyPhoToMoveHistory(text: string): {
+  success: boolean;
+  moves: XiangqiMove[];
+  boardHistory: XiangqiPiece[][];
+  error?: string;
+} {
+  const cleanText = text.trim();
+  if (!cleanText) {
+    return {
+      success: false,
+      moves: [],
+      boardHistory: [],
+      error: 'Vui lòng dán nội dung kỳ phổ vào ô trống.',
+    };
+  }
+
+  const rawLines = cleanText
+    .split(/\r?\n|;|\|/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith('#') && !l.startsWith('//') && !l.startsWith('==='));
+
+  if (rawLines.length === 0) {
+    return {
+      success: false,
+      moves: [],
+      boardHistory: [],
+      error: 'Không tìm thấy nước đi nào trong kỳ phổ.',
+    };
+  }
+
+  let currentPieces = createInitialXiangqiPieces();
+  let currentSide: XiangqiSide = 'RED';
+  const parsedMoves: XiangqiMove[] = [];
+  const boardHistory: XiangqiPiece[][] = [currentPieces.map((p) => ({ ...p }))];
+
+  for (let i = 0; i < rawLines.length; i++) {
+    let line = rawLines[i];
+
+    // Bỏ số thứ tự đầu dòng: "1.", "1)", "#1", "Nước 1:"
+    line = line.replace(/^(?:nước\s*)?#?\d+\s*[\.\)\:\-]?\s*/i, '').trim();
+    // Bỏ ký hiệu màu đầu dòng: "🔴", "⚫", "Đỏ:", "Đen:", "[Đỏ]", "[Đen]"
+    let explicitSide: XiangqiSide | null = null;
+    if (/^(?:🔴|\[?đỏ\]?\s*:?\s*)/i.test(line)) {
+      explicitSide = 'RED';
+      line = line.replace(/^(?:🔴|\s*\[?đỏ\]?\s*:?\s*)+/i, '').trim();
+    } else if (/^(?:⚫|\[?đen\]?\s*:?\s*)/i.test(line)) {
+      explicitSide = 'BLACK';
+      line = line.replace(/^(?:⚫|\s*\[?đen\]?\s*:?\s*)+/i, '').trim();
+    }
+
+    if (!line) continue;
+
+    const sideToMove: XiangqiSide = explicitSide || currentSide;
+    const normalizedInput = normalizeKyPhoMoveText(line);
+
+    const sidePieces = currentPieces.filter((p) => p.color === sideToMove);
+    let matchedMove: {
+      piece: XiangqiPiece;
+      to: { x: number; y: number };
+      capturedPiece?: XiangqiPiece;
+      notation: string;
+    } | null = null;
+
+    // Tìm trong tất cả nước đi hợp lệ của sideToMove
+    for (const piece of sidePieces) {
+      const legalTargets = getLegalMoves(piece, currentPieces);
+      for (const to of legalTargets) {
+        const targetPiece = getPieceAt(currentPieces, to.x, to.y);
+        const fullNotation = generateMoveNotation(piece, to, targetPiece, currentPieces);
+        const simpleNotation = generateMoveNotation(piece, to, undefined, undefined);
+
+        const normFull = normalizeKyPhoMoveText(fullNotation);
+        const normSimple = normalizeKyPhoMoveText(simpleNotation);
+
+        // Hỗ trợ cả định dạng cũ (x + 1) phòng trường hợp người dùng dán kỳ phổ cũ
+        const legacyAction =
+          piece.y === to.y
+            ? `bình ${to.x + 1}`
+            : (piece.color === 'RED' ? to.y < piece.y : to.y > piece.y)
+            ? `tiến ${Math.abs(piece.y - to.y)}`
+            : `thoái ${Math.abs(piece.y - to.y)}`;
+        const normLegacy = normalizeKyPhoMoveText(
+          `${getPieceNameVN(piece.type, piece.color)} ${piece.x + 1} ${legacyAction}`
+        );
+
+        if (
+          normalizedInput === normFull ||
+          normalizedInput === normSimple ||
+          normalizedInput === normLegacy
+        ) {
+          matchedMove = {
+            piece,
+            to,
+            capturedPiece: targetPiece,
+            notation: fullNotation,
+          };
+          break;
+        }
+      }
+      if (matchedMove) break;
+    }
+
+    if (!matchedMove) {
+      return {
+        success: parsedMoves.length > 0,
+        moves: parsedMoves,
+        boardHistory,
+        error: `Không thể nhận diện hoặc nước đi không hợp lệ ở bước #${parsedMoves.length + 1}: "${rawLines[i]}"`,
+      };
+    }
+
+    const from = { x: matchedMove.piece.x, y: matchedMove.piece.y };
+    const to = matchedMove.to;
+    const nextPieces = currentPieces
+      .filter((p) => !(p.x === to.x && p.y === to.y))
+      .map((p) => (p.id === matchedMove!.piece.id ? { ...p, x: to.x, y: to.y } : p));
+
+    const nextSide: XiangqiSide = sideToMove === 'RED' ? 'BLACK' : 'RED';
+    const isCheck = isSideInCheck(nextSide, nextPieces);
+
+    const moveRecord: XiangqiMove = {
+      from,
+      to,
+      piece: { ...matchedMove.piece, x: to.x, y: to.y },
+      capturedPiece: matchedMove.capturedPiece,
+      notation: matchedMove.notation,
+      isCheck,
+      timestamp: Date.now() + i,
+    };
+
+    parsedMoves.push(moveRecord);
+    currentPieces = nextPieces;
+    boardHistory.push(currentPieces.map((p) => ({ ...p })));
+    currentSide = nextSide;
+  }
+
+  if (parsedMoves.length === 0) {
+    return {
+      success: false,
+      moves: [],
+      boardHistory: [],
+      error: 'Không tìm thấy nước đi hợp lệ nào trong kỳ phổ.',
+    };
+  }
+
+  return { success: true, moves: parsedMoves, boardHistory };
+}
+
+
 

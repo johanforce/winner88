@@ -115,6 +115,30 @@ class ChessSoundEffects {
     }
   }
 
+  public playWarning(isUrgent: boolean = false) {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = isUrgent ? 'sawtooth' : 'sine';
+      const freq = isUrgent ? 1046 : 880;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      if (isUrgent) {
+        osc.frequency.exponentialRampToValueAtTime(1318, ctx.currentTime + 0.08);
+      }
+      const vol = isUrgent ? 0.35 : 0.25;
+      gain.gain.setValueAtTime(vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (isUrgent ? 0.12 : 0.15));
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + (isUrgent ? 0.13 : 0.16));
+    } catch {
+      // ignore
+    }
+  }
+
   public playTimeout() {
     const ctx = this.getContext();
     if (!ctx) return;
@@ -130,27 +154,6 @@ class ChessSoundEffects {
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.42);
-    } catch {
-      // ignore
-    }
-  }
-
-  public playCountdownWarning(secondsLeft: number) {
-    const ctx = this.getContext();
-    if (!ctx) return;
-    try {
-      const isUrgent = secondsLeft <= 3;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = isUrgent ? 'sawtooth' : 'triangle';
-      const freq = isUrgent ? 950 : secondsLeft <= 5 ? 850 : 720;
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(0.28, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (isUrgent ? 0.15 : 0.11));
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + (isUrgent ? 0.16 : 0.12));
     } catch {
       // ignore
     }

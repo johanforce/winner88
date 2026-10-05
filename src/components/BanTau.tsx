@@ -494,10 +494,7 @@ export const BanTau: React.FC<BanTauProps> = ({
         <KhungChat
           roomCode={roomState.code}
           playerId={myPlayerId}
-          myPlayerId={myPlayerId}
-          messages={chatMessages}
           chatMessages={chatMessages}
-          isFloating={true}
           onClose={() => setIsChatOpen(false)}
         />
       )}
